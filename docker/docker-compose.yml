@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: secure-vault-postgres
+    environment:
+      POSTGRES_DB: secure_vault
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "54320:5432" # ← DRUGI PORT!
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: secure-vault-redis
+    command: redis-server
+    ports:
+      - "63790:6379" # ← DRUGI PORT!
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
