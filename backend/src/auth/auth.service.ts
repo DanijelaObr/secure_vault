@@ -9,12 +9,14 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../database/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private jwtService: JwtService, // ← DODAJ OVO!
   ) {}
 
   async register(
@@ -59,7 +61,7 @@ export class AuthService {
 
   async login(
     loginDto: LoginDto,
-  ): Promise<{ message: string; userId: string }> {
+  ): Promise<{ access_token: string; user: any }> {
     const { email, password } = loginDto;
 
     // Pronađi korisnika
@@ -68,7 +70,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Provjeri da li je nalog frozen (honeypot)
+    // Provjeri frozen status
     if (user.isFrozen) {
       throw new UnauthorizedException(
         'Account is frozen. Contact administrator.',
@@ -82,15 +84,28 @@ export class AuthService {
     }
 
     // TODO: Provjeri MFA ako je enabled
-    // TODO: Generiši JWT token
 
     // Update last login
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
+    // ===== GENERIŠI JWT TOKEN =====
+    const payload = {
+      sub: user.id, // 'sub' je JWT standard za userId
+      email: user.email,
+      role: user.role,
+    };
+
+    const access_token = this.jwtService.sign(payload);
+
     return {
-      message: 'Login successful',
-      userId: user.id,
+      access_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      },
     };
   }
 }
