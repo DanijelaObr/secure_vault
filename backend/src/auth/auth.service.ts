@@ -10,13 +10,15 @@ import { User } from '../database/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
+import { MfaService } from './mfa.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private jwtService: JwtService, // ← DODAJ OVO!
+    private jwtService: JwtService,
+    private mfaService: MfaService,
   ) {}
 
   async register(
@@ -61,8 +63,8 @@ export class AuthService {
 
   async login(
     loginDto: LoginDto,
-  ): Promise<{ access_token: string; user: any }> {
-    const { email, password } = loginDto;
+  ): Promise<{ access_token: string; user: any; requiresMfa?: boolean }> {
+    const { email, password, mfaCode } = loginDto;
 
     // Pronađi korisnika
     const user = await this.userRepository.findOne({ where: { email } });
@@ -83,15 +85,31 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // TODO: Provjeri MFA ako je enabled
+    // ===== MFA PROVJERA =====
+    if (user.mfaEnabled) {
+      // Ako MFA je enabled, MORA poslati mfaCode
+      if (!mfaCode) {
+        return {
+          access_token: '',
+          user: { id: user.id, email: user.email },
+          requiresMfa: true, // Signal frontend-u da traži MFA kod
+        };
+      }
+
+      // Validiraj MFA kod
+      const isValidMfa = this.mfaService.verifyToken(mfaCode, user.mfaSecret!);
+      if (!isValidMfa) {
+        throw new UnauthorizedException('Invalid MFA code');
+      }
+    }
 
     // Update last login
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
-    // ===== GENERIŠI JWT TOKEN =====
+    // Generiši JWT token
     const payload = {
-      sub: user.id, // 'sub' je JWT standard za userId
+      sub: user.id,
       email: user.email,
       role: user.role,
     };
@@ -107,5 +125,81 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  /**
+   * Aktiviraj MFA za korisnika
+   */
+  async enableMfa(userId: string): Promise<{ qrCode: string; secret: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Generiši MFA secret
+    const secret = this.mfaService.generateSecret();
+
+    // Generiši QR kod URL
+    const otpAuthUrl = this.mfaService.generateQrCodeUrl(user.email, secret);
+
+    // Generiši QR kod sliku
+    const qrCode = await this.mfaService.generateQrCode(otpAuthUrl);
+
+    // Sačuvaj secret (ali još ne aktiviraj MFA - čekamo potvrdu)
+    user.mfaSecret = secret;
+    await this.userRepository.save(user);
+
+    return { qrCode, secret };
+  }
+
+  /**
+   * Verifikuj i finalizuj MFA aktivaciju
+   */
+  async verifyAndEnableMfa(
+    userId: string,
+    token: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.mfaSecret) {
+      throw new UnauthorizedException('MFA setup not initiated');
+    }
+
+    // Provjeri da li je kod validan
+    const isValid = this.mfaService.verifyToken(token, user.mfaSecret);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
+
+    // Aktiviraj MFA
+    user.mfaEnabled = true;
+    await this.userRepository.save(user);
+
+    return { message: 'MFA enabled successfully' };
+  }
+
+  /**
+   * Disable MFA
+   */
+  async disableMfa(
+    userId: string,
+    token: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.mfaEnabled) {
+      throw new UnauthorizedException('MFA is not enabled');
+    }
+
+    // Provjeri da li je kod validan prije nego onemogućimo MFA
+    const isValid = this.mfaService.verifyToken(token, user.mfaSecret!);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid MFA code');
+    }
+
+    // Disable MFA
+    user.mfaEnabled = false;
+    user.mfaSecret = null;
+    await this.userRepository.save(user);
+
+    return { message: 'MFA disabled successfully' };
   }
 }

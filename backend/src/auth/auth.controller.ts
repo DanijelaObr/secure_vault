@@ -5,6 +5,7 @@ import {
   Post,
   UseGuards,
   Request,
+  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -41,5 +42,23 @@ export class AuthController {
         lastLoginAt: req.user.lastLoginAt,
       },
     };
+  }
+
+  @Post('mfa/enable')
+  @UseGuards(JwtAuthGuard)
+  async enableMfa(@Request() req) {
+    return this.authService.enableMfa(req.user.id);
+  }
+
+  @Post('mfa/verify')
+  @UseGuards(JwtAuthGuard)
+  async verifyMfa(@Request() req, @Body() body: { token: string }) {
+    return this.authService.verifyAndEnableMfa(req.user.id, body.token);
+  }
+
+  @Post('mfa/disable')
+  @UseGuards(JwtAuthGuard)
+  async disableMfa(@Request() req, @Body() body: { token: string }) {
+    return this.authService.disableMfa(req.user.id, body.token);
   }
 }
