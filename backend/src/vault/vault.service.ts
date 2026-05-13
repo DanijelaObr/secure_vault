@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { Secret } from '../database/entities/secret.entity';
 import { CreateSecretDto } from './dto/create-secret.dto';
 import { UpdateSecretDto } from './dto/update-secret.dto';
+import { User } from '../database/entities/user.entity';
 
 @Injectable()
 export class VaultService {
@@ -54,6 +55,24 @@ export class VaultService {
       throw new NotFoundException('Secret not found');
     }
 
+    // ===== HONEYPOT DETEKCIJA =====
+    if (secret.isHoneypot) {
+      // Loguj honeypot pristup
+      console.warn(
+        `🚨 HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
+      );
+
+      // Freeze korisnikov account ODMAH!
+      await this.freezeUserAccount(userId);
+
+      // TODO: Dodati audit log entry
+      // TODO: Poslati alert admin-u (email, SMS, itd.)
+
+      throw new ForbiddenException(
+        'This account has been frozen due to suspicious activity. Contact administrator.',
+      );
+    }
+
     // Provjeri da li je korisnik vlasnik
     if (secret.ownerId !== userId) {
       throw new ForbiddenException('You do not have access to this secret');
@@ -81,6 +100,21 @@ export class VaultService {
   }
 
   /**
+   * Freeze korisnikov account (honeypot triggered)
+   */
+  private async freezeUserAccount(userId: string): Promise<void> {
+    const userRepository = this.secretRepository.manager.getRepository(User);
+
+    const user = await userRepository.findOne({ where: { id: userId } });
+    if (user) {
+      user.isFrozen = true;
+      await userRepository.save(user);
+      console.error(
+        `🔒 User account ${userId} (${user.email}) has been FROZEN!`,
+      );
+    }
+  }
+  /**
    * Brisanje tajne
    */
   async deleteSecret(
@@ -101,5 +135,23 @@ export class VaultService {
       where: { ownerId: userId, isFavorite: true },
       order: { updatedAt: 'DESC' },
     });
+  }
+
+  /**
+   * Kreiranje honeypot tajne (samo za admin-e!)
+   */
+  async createHoneypot(
+    userId: string,
+    createSecretDto: CreateSecretDto,
+  ): Promise<Secret> {
+    const secret = this.secretRepository.create({
+      ...createSecretDto,
+      ownerId: userId,
+      isHoneypot: true, // ← Označi kao honeypot!
+    });
+
+    console.log(`Honeypot secret created: "${secret.title}" by user ${userId}`);
+
+    return await this.secretRepository.save(secret);
   }
 }
