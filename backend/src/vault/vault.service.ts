@@ -13,6 +13,8 @@ import { SharedSecret } from '../database/entities/shared-secret.entity';
 import { ShareSecretDto } from './dto/share-secret.dto';
 import { CryptoService } from '../shared/services/crypto.service';
 import { SharedSecretPermission } from 'src/shared/enums';
+import { AuditService } from '../shared/services/audit.service';
+import { AuditAction } from '../shared/enums';
 
 @Injectable()
 export class VaultService {
@@ -22,6 +24,7 @@ export class VaultService {
     @InjectRepository(SharedSecret)
     private sharedSecretRepository: Repository<SharedSecret>,
     private cryptoService: CryptoService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -36,7 +39,16 @@ export class VaultService {
       ownerId: userId,
     });
 
-    return await this.secretRepository.save(secret);
+    const savedSecret = await this.secretRepository.save(secret);
+
+    await this.auditService.log({
+      action: AuditAction.SECRET_CREATE,
+      userId,
+      secretId: savedSecret.id,
+      metadata: { title: savedSecret.title, type: savedSecret.type },
+    });
+
+    return savedSecret;
   }
 
   /**
@@ -69,10 +81,23 @@ export class VaultService {
         `HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
       );
 
+      // AUDIT LOG - Honeypot
+      await this.auditService.log({
+        action: AuditAction.HONEYPOT_TRIGGERED,
+        userId,
+        secretId,
+        metadata: { secretTitle: secret.title },
+      });
+
       // Freeze korisnikov account ODMAH!
       await this.freezeUserAccount(userId);
 
-      // TODO: Dodati audit log entry
+      await this.auditService.log({
+        action: AuditAction.SECRET_READ,
+        userId,
+        secretId: secret.id,
+      });
+
       // TODO: Poslati alert admin-u (email, SMS, itd.)
 
       throw new ForbiddenException(
@@ -100,10 +125,20 @@ export class VaultService {
     secretId: string,
     updateSecretDto: UpdateSecretDto,
   ): Promise<Secret> {
-    const secret = await this.getSecretById(userId, secretId); // Provjera vlasništva
+    const secret = await this.getSecretById(userId, secretId);
 
     Object.assign(secret, updateSecretDto);
-    return await this.secretRepository.save(secret);
+    const updatedSecret = await this.secretRepository.save(secret);
+
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.SECRET_UPDATE,
+      userId,
+      secretId,
+      metadata: { changes: updateSecretDto },
+    });
+
+    return updatedSecret;
   }
 
   /**
@@ -126,9 +161,18 @@ export class VaultService {
     userId: string,
     secretId: string,
   ): Promise<{ message: string }> {
-    const secret = await this.getSecretById(userId, secretId); // Provjera vlasništva
+    const secret = await this.getSecretById(userId, secretId);
 
     await this.secretRepository.remove(secret);
+
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.SECRET_DELETE,
+      userId,
+      secretId,
+      metadata: { title: secret.title },
+    });
+
     return { message: 'Secret deleted successfully' };
   }
 
@@ -207,6 +251,17 @@ export class VaultService {
 
     await this.sharedSecretRepository.save(sharedSecret);
 
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.SECRET_SHARE,
+      userId: ownerId,
+      secretId,
+      metadata: {
+        sharedWith: targetUser.email,
+        permission: shareDto.permission || 'read',
+      },
+    });
+
     return { message: `Secret shared with ${targetUser.email}` };
   }
 
@@ -266,6 +321,14 @@ export class VaultService {
     }
 
     await this.sharedSecretRepository.remove(sharedSecret);
+
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.SECRET_REVOKE_SHARE,
+      userId: ownerId,
+      secretId,
+      metadata: { revokedFrom: targetUser.email },
+    });
 
     return { message: `Sharing revoked for ${targetUser.email}` };
   }
