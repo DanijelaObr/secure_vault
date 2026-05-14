@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { VaultModule } from './vault/vault.module';
+import { SharedModule } from './shared/shared.module';
 
 @Module({
   imports: [
@@ -33,9 +34,6 @@ import { VaultModule } from './vault/vault.module';
         console.log('DB_PORT:', port);
         console.log('DB_USERNAME:', username);
         console.log('DB_PASSWORD:', password);
-        console.log('DB_DATABASE:', database);
-
-        // NOVO - direktna URL konekcija
         const url = `postgresql://${username}:${password}@${host}:${port}/${database}`;
         console.log('📡 Connection URL:', url);
 
@@ -45,17 +43,14 @@ import { VaultModule } from './vault/vault.module';
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: true,
           logging: true,
-          // NOVO - eksplicitno isključi SSL
           ssl: false,
           extra: {
-            // NOVO - povećaj timeout
             connectionTimeoutMillis: 5000,
           },
         };
       },
     }),
 
-    // Rate limiting - NOVA VERZIJA
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -70,7 +65,7 @@ import { VaultModule } from './vault/vault.module';
     }),
 
     AuthModule,
-
+    SharedModule,
     VaultModule,
   ],
   controllers: [AppController],

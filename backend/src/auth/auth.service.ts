@@ -11,6 +11,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { MfaService } from './mfa.service';
+import { CryptoService } from '../shared/services/crypto.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
     private userRepository: Repository<User>,
     private jwtService: JwtService,
     private mfaService: MfaService,
+    private cryptoService: CryptoService,
   ) {}
 
   async register(
@@ -37,10 +39,14 @@ export class AuthService {
     // Hash lozinke
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // TODO: Generisati RSA key pair (asimetrična kriptografija)
-    // Za sada - placeholder
-    const publicKey = 'PUBLIC_KEY_PLACEHOLDER';
-    const encryptedPrivateKey = 'ENCRYPTED_PRIVATE_KEY_PLACEHOLDER';
+    // Generiši RSA key pair
+    const { publicKey, privateKey } = this.cryptoService.generateKeyPair();
+
+    // Enkriptuj private key sa master password-om korisnika
+    const encryptedPrivateKey = this.cryptoService.encryptPrivateKey(
+      privateKey,
+      password, // Master password
+    );
 
     // Kreiraj korisnika
     const user = this.userRepository.create({

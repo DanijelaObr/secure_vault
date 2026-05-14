@@ -9,12 +9,19 @@ import { Secret } from '../database/entities/secret.entity';
 import { CreateSecretDto } from './dto/create-secret.dto';
 import { UpdateSecretDto } from './dto/update-secret.dto';
 import { User } from '../database/entities/user.entity';
+import { SharedSecret } from '../database/entities/shared-secret.entity';
+import { ShareSecretDto } from './dto/share-secret.dto';
+import { CryptoService } from '../shared/services/crypto.service';
+import { SharedSecretPermission } from 'src/shared/enums';
 
 @Injectable()
 export class VaultService {
   constructor(
     @InjectRepository(Secret)
     private secretRepository: Repository<Secret>,
+    @InjectRepository(SharedSecret)
+    private sharedSecretRepository: Repository<SharedSecret>,
+    private cryptoService: CryptoService,
   ) {}
 
   /**
@@ -59,7 +66,7 @@ export class VaultService {
     if (secret.isHoneypot) {
       // Loguj honeypot pristup
       console.warn(
-        `🚨 HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
+        `HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
       );
 
       // Freeze korisnikov account ODMAH!
@@ -109,9 +116,7 @@ export class VaultService {
     if (user) {
       user.isFrozen = true;
       await userRepository.save(user);
-      console.error(
-        `🔒 User account ${userId} (${user.email}) has been FROZEN!`,
-      );
+      console.error(`User account ${userId} (${user.email}) has been FROZEN!`);
     }
   }
   /**
@@ -153,5 +158,115 @@ export class VaultService {
     console.log(`Honeypot secret created: "${secret.title}" by user ${userId}`);
 
     return await this.secretRepository.save(secret);
+  }
+
+  /**
+   * Podijeli tajnu sa drugim korisnikom
+   */
+  async shareSecret(
+    ownerId: string,
+    secretId: string,
+    shareDto: ShareSecretDto,
+  ): Promise<{ message: string }> {
+    const secret = await this.getSecretById(ownerId, secretId);
+
+    const userRepository = this.secretRepository.manager.getRepository(User);
+    const targetUser = await userRepository.findOne({
+      where: { email: shareDto.sharedWithEmail },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException(
+        `User with email ${shareDto.sharedWithEmail} not found`,
+      );
+    }
+
+    if (targetUser.id === ownerId) {
+      throw new ForbiddenException('Cannot share secret with yourself');
+    }
+
+    const existingShare = await this.sharedSecretRepository.findOne({
+      where: { secretId, sharedWithUserId: targetUser.id },
+    });
+
+    if (existingShare) {
+      throw new ForbiddenException('Secret already shared with this user');
+    }
+
+    const encryptedKey = this.cryptoService.encryptWithPublicKey(
+      secret.encryptedData,
+      targetUser.publicKey,
+    );
+
+    const sharedSecret = this.sharedSecretRepository.create({
+      secretId,
+      sharedWithUserId: targetUser.id,
+      encryptedKey,
+      permission: shareDto.permission || SharedSecretPermission.READ,
+    });
+
+    await this.sharedSecretRepository.save(sharedSecret);
+
+    return { message: `Secret shared with ${targetUser.email}` };
+  }
+
+  /**
+   * Dohvati sve tajne podijeljene SA MNOM
+   */
+  async getSharedWithMe(userId: string): Promise<any[]> {
+    const sharedSecrets = await this.sharedSecretRepository.find({
+      where: { sharedWithUserId: userId },
+      relations: ['secret', 'secret.owner'],
+    });
+
+    return sharedSecrets.map((shared) => ({
+      id: shared.secret.id,
+      title: shared.secret.title,
+      type: shared.secret.type,
+      url: shared.secret.url,
+      username: shared.secret.username,
+      notes: shared.secret.notes,
+      encryptedData: shared.encryptedKey,
+      owner: {
+        email: shared.secret.owner.email,
+        username: shared.secret.owner.username,
+      },
+      permission: shared.permission,
+      sharedAt: shared.sharedAt,
+    }));
+  }
+
+  /**
+   * Revoke sharing
+   */
+  async revokeShare(
+    ownerId: string,
+    secretId: string,
+    sharedWithEmail: string,
+  ): Promise<{ message: string }> {
+    await this.getSecretById(ownerId, secretId);
+
+    const userRepository = this.secretRepository.manager.getRepository(User);
+    const targetUser = await userRepository.findOne({
+      where: { email: sharedWithEmail },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException(
+        `User with email ${sharedWithEmail} not found`,
+      );
+    }
+
+    const sharedSecret = await this.sharedSecretRepository.findOne({
+      where: { secretId, sharedWithUserId: targetUser.id },
+    });
+
+    if (!sharedSecret) {
+      throw new NotFoundException('Shared secret not found');
+    }
+
+    await this.sharedSecretRepository.remove(sharedSecret);
+
+    return { message: `Sharing revoked for ${targetUser.email}` };
   }
 }

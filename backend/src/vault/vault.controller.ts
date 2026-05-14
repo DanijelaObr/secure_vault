@@ -16,6 +16,7 @@ import { UpdateSecretDto } from './dto/update-secret.dto';
 import { UserRole } from '../shared/enums';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ShareSecretDto } from './dto/share-secret.dto';
 
 @Controller('vault')
 @UseGuards(JwtAuthGuard) // SVE rute zaštićene JWT-om!
@@ -68,5 +69,28 @@ export class VaultController {
     @Body() createSecretDto: CreateSecretDto,
   ) {
     return this.vaultService.createHoneypot(req.user.id, createSecretDto);
+  }
+
+  @Post('secrets/:id/share')
+  async shareSecret(
+    @Request() req,
+    @Param('id') secretId: string,
+    @Body() shareDto: ShareSecretDto,
+  ) {
+    return this.vaultService.shareSecret(req.user.id, secretId, shareDto);
+  }
+
+  @Get('shared-with-me')
+  async getSharedWithMe(@Request() req) {
+    return this.vaultService.getSharedWithMe(req.user.id);
+  }
+
+  @Delete('secrets/:id/share/:email')
+  async revokeShare(
+    @Request() req,
+    @Param('id') secretId: string,
+    @Param('email') email: string,
+  ) {
+    return this.vaultService.revokeShare(req.user.id, secretId, email);
   }
 }
