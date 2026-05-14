@@ -28,10 +28,10 @@ export class Secret {
   })
   type!: SecretType;
 
-  @Column({ type: 'varchar', nullable: true }) // ← DODAJ type!
+  @Column({ type: 'varchar', nullable: true })
   url!: string | null;
 
-  @Column({ type: 'varchar', nullable: true }) // ← DODAJ type!
+  @Column({ type: 'varchar', nullable: true })
   username!: string | null;
 
   @Column({ type: 'text', nullable: true })
