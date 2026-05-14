@@ -17,11 +17,15 @@ import { UserRole } from '../shared/enums';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ShareSecretDto } from './dto/share-secret.dto';
+import { AuditService } from '../shared/services/audit.service';
 
 @Controller('vault')
 @UseGuards(JwtAuthGuard) // SVE rute zaštićene JWT-om!
 export class VaultController {
-  constructor(private readonly vaultService: VaultService) {}
+  constructor(
+    private readonly vaultService: VaultService,
+    private readonly auditService: AuditService,
+  ) {}
 
   @Post('secrets')
   async createSecret(@Request() req, @Body() createSecretDto: CreateSecretDto) {
@@ -92,5 +96,24 @@ export class VaultController {
     @Param('email') email: string,
   ) {
     return this.vaultService.revokeShare(req.user.id, secretId, email);
+  }
+
+  @Get('audit/recent')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getRecentAuditLogs() {
+    return this.auditService.getRecentLogs(50);
+  }
+
+  @Get('audit/verify')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async verifyAuditIntegrity() {
+    return this.auditService.verifyIntegrity();
+  }
+
+  @Get('audit/my-activity')
+  async getMyActivity(@Request() req) {
+    return this.auditService.getLogsByUser(req.user.id, 20);
   }
 }

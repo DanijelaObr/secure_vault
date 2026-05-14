@@ -12,6 +12,8 @@ import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { MfaService } from './mfa.service';
 import { CryptoService } from '../shared/services/crypto.service';
+import { AuditService } from '../shared/services/audit.service';
+import { AuditAction } from '../shared/enums';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +23,7 @@ export class AuthService {
     private jwtService: JwtService,
     private mfaService: MfaService,
     private cryptoService: CryptoService,
+    private auditService: AuditService,
   ) {}
 
   async register(
@@ -60,6 +63,12 @@ export class AuthService {
     });
 
     const savedUser = await this.userRepository.save(user);
+
+    await this.auditService.log({
+      action: AuditAction.USER_REGISTER,
+      userId: savedUser.id,
+      metadata: { email: savedUser.email, role: savedUser.role },
+    });
 
     return {
       message: 'User registered successfully',
@@ -122,6 +131,13 @@ export class AuthService {
 
     const access_token = this.jwtService.sign(payload);
 
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.USER_LOGIN,
+      userId: user.id,
+      metadata: { email: user.email },
+    });
+
     return {
       access_token,
       user: {
@@ -180,6 +196,12 @@ export class AuthService {
     user.mfaEnabled = true;
     await this.userRepository.save(user);
 
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.MFA_ENABLED,
+      userId,
+    });
+
     return { message: 'MFA enabled successfully' };
   }
 
@@ -205,6 +227,12 @@ export class AuthService {
     user.mfaEnabled = false;
     user.mfaSecret = null;
     await this.userRepository.save(user);
+
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.MFA_DISABLED,
+      userId,
+    });
 
     return { message: 'MFA disabled successfully' };
   }
