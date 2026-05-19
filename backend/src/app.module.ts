@@ -9,6 +9,8 @@ import { VaultModule } from './vault/vault.module';
 import { SharedModule } from './shared/shared.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService): TypeOrmModuleOptions => ({
         type: 'postgres',
         host: configService.get<string>('DB_HOST'),
         port: configService.get<number>('DB_PORT'),
@@ -28,7 +30,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
         database: configService.get<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
-        logging: false,
+        logging: true,
       }),
     }),
     ThrottlerModule.forRootAsync({
@@ -37,10 +39,14 @@ import { ThrottlerGuard } from '@nestjs/throttler';
       useFactory: (configService: ConfigService) => ({
         throttlers: [
           {
-            ttl: configService.get<number>('RATE_LIMIT_TTL') || 60,
-            limit: configService.get<number>('RATE_LIMIT_MAX') || 100,
+            ttl: configService.get<number>('RATE_LIMIT_TTL') || 60000,
+            limit: configService.get<number>('RATE_LIMIT_MAX') || 10,
           },
         ],
+        storage: new ThrottlerStorageRedisService({
+          host: configService.get<string>('REDIS_HOST') || 'localhost',
+          port: configService.get<number>('REDIS_PORT') || 6379,
+        }),
       }),
     }),
     SharedModule,
