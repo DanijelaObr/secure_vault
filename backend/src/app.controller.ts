@@ -34,6 +34,7 @@ export class AppController {
       DROP TYPE IF EXISTS secrets_type_enum CASCADE;
       DROP TYPE IF EXISTS audit_logs_action_enum CASCADE;
       DROP TYPE IF EXISTS shared_secrets_permission_enum CASCADE;
+      DROP TABLE IF EXISTS security_policies CASCADE;
     `);
 
       // Create enums
@@ -125,6 +126,30 @@ export class AppController {
       );
     `);
 
+      // Create security_policies table
+      await queryRunner.query(`
+  CREATE TABLE security_policies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    "minPasswordLength" INTEGER DEFAULT 12,
+    "requireUppercase" BOOLEAN DEFAULT true,
+    "requireLowercase" BOOLEAN DEFAULT true,
+    "requireNumbers" BOOLEAN DEFAULT true,
+    "requireSpecialChars" BOOLEAN DEFAULT true,
+    "accessTokenDuration" INTEGER DEFAULT 15,
+    "refreshTokenDuration" INTEGER DEFAULT 10080,
+    "sessionTimeout" INTEGER DEFAULT 30,
+    "secretRotationPeriod" INTEGER DEFAULT 90,
+    "enforceSecretRotation" BOOLEAN DEFAULT true,
+    "maxLoginAttempts" INTEGER DEFAULT 5,
+    "accountLockoutDuration" INTEGER DEFAULT 15,
+    "requireMfaForAdmins" BOOLEAN DEFAULT false,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Insert default policy
+  INSERT INTO security_policies (id) VALUES (uuid_generate_v4());
+`);
       await queryRunner.commitTransaction();
 
       return {

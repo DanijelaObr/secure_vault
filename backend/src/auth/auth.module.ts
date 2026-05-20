@@ -10,6 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { MfaService } from './mfa.service';
 import { RefreshToken } from '../database/entities/refresh-token.entity';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { RefreshToken } from '../database/entities/refresh-token.entity';
         signOptions: { expiresIn: '1h' },
       }),
     }),
+    AdminModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, MfaService],

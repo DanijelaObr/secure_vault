@@ -10,7 +10,6 @@ export class RegisterDto {
   username!: string;
 
   @IsString()
-  @MinLength(8)
   password!: string; // Master password
 
   @IsEnum(UserRole)
