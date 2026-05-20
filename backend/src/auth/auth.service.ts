@@ -14,6 +14,7 @@ import { MfaService } from './mfa.service';
 import { CryptoService } from '../shared/services/crypto.service';
 import { AuditService } from '../shared/services/audit.service';
 import { AuditAction } from '../shared/enums';
+import { UserRole } from '../shared/enums';
 
 @Injectable()
 export class AuthService {
@@ -235,5 +236,60 @@ export class AuthService {
     });
 
     return { message: 'MFA disabled successfully' };
+  }
+
+  async googleLogin(googleUser: any) {
+    let user = await this.userRepository.findOne({
+      where: { email: googleUser.email },
+    });
+
+    if (!user) {
+      // Kreiraj novog korisnika ako ne postoji
+      const { publicKey, privateKey } = this.cryptoService.generateKeyPair();
+
+      user = this.userRepository.create({
+        email: googleUser.email,
+        username: googleUser.email.split('@')[0],
+        passwordHash: '', // Google OAuth - nema lozinke
+        role: UserRole.DEVELOPER,
+        publicKey,
+        encryptedPrivateKey: '', // Google OAuth - nema master password-a
+        mfaEnabled: false,
+      });
+
+      user = await this.userRepository.save(user);
+
+      // AUDIT LOG
+      await this.auditService.log({
+        action: AuditAction.USER_REGISTER,
+        userId: user.id,
+        metadata: { email: user.email, provider: 'google' },
+      });
+    }
+
+    // Update lastLoginAt
+    user.lastLoginAt = new Date();
+    await this.userRepository.save(user);
+
+    // Generate JWT
+    const payload = { email: user.email, sub: user.id, role: user.role };
+    const access_token = this.jwtService.sign(payload);
+
+    // AUDIT LOG
+    await this.auditService.log({
+      action: AuditAction.USER_LOGIN,
+      userId: user.id,
+      metadata: { email: user.email, provider: 'google' },
+    });
+
+    return {
+      access_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      },
+    };
   }
 }

@@ -12,6 +12,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -63,5 +64,17 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async disableMfa(@Request() req, @Body() body: { token: string }) {
     return this.authService.disableMfa(req.user.id, body.token);
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  async googleAuth(@Request() req) {
+    // Redirects to Google
+  }
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  async googleAuthRedirect(@Request() req) {
+    return this.authService.googleLogin(req.user);
   }
 }
