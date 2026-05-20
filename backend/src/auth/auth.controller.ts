@@ -6,6 +6,8 @@ import {
   UseGuards,
   Request,
   Req,
+  Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -13,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -25,9 +28,40 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 pokušaja u 15 min
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() req,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    const result = await this.authService.login(loginDto, ipAddress, userAgent);
+
+    // Set HttpOnly cookies
+    if (result.access_token) {
+      res.cookie('accessToken', result.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000, // 15 min
+      });
+    }
+
+    if (result.refresh_token) {
+      res.cookie('refreshToken', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    }
+
+    return {
+      user: result.user,
+      requiresMfa: result.requiresMfa,
+    };
   }
 
   @Get('profile')
@@ -76,5 +110,49 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   async googleAuthRedirect(@Request() req) {
     return this.authService.googleLogin(req.user);
+  }
+
+  @Post('refresh')
+  async refresh(@Req() req, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new UnauthorizedException('No refresh token provided');
+    }
+
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    const result = await this.authService.refreshTokens(
+      refreshToken,
+      ipAddress,
+      userAgent,
+    );
+
+    res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { message: 'Tokens refreshed' };
+  }
+
+  @Post('logout')
+  async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refreshToken;
+    await this.authService.logout(refreshToken);
+
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
+    return { message: 'Logged out successfully' };
   }
 }

@@ -1,12 +1,14 @@
 {
   "dependencies": {
     "@nestjs/passport": "^11.0.5",
+    "cookie-parser": "^1.4.7",
     "ioredis": "^5.10.1",
     "nestjs-throttler-storage-redis": "^0.5.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/ioredis": "^4.28.10",
     "@types/passport-google-oauth20": "^2.0.17"
   }
