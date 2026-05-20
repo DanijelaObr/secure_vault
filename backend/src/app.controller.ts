@@ -29,6 +29,7 @@ export class AppController {
       DROP TABLE IF EXISTS audit_logs CASCADE;
       DROP TABLE IF EXISTS secrets CASCADE;
       DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS refresh_tokens CASCADE;
       DROP TYPE IF EXISTS users_role_enum CASCADE;
       DROP TYPE IF EXISTS secrets_type_enum CASCADE;
       DROP TYPE IF EXISTS audit_logs_action_enum CASCADE;
@@ -43,7 +44,7 @@ export class AppController {
       CREATE TYPE shared_secrets_permission_enum AS ENUM('read', 'write');
     `);
 
-      // Create tables
+      // Create users table
       await queryRunner.query(`
       CREATE TABLE users (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -63,6 +64,7 @@ export class AppController {
       );
     `);
 
+      // Create secrets table
       await queryRunner.query(`
       CREATE TABLE secrets (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -81,6 +83,7 @@ export class AppController {
       );
     `);
 
+      // Create audit_logs table
       await queryRunner.query(`
       CREATE TABLE audit_logs (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -96,6 +99,7 @@ export class AppController {
       );
     `);
 
+      // Create shared_secrets table
       await queryRunner.query(`
       CREATE TABLE shared_secrets (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -104,6 +108,20 @@ export class AppController {
         "encryptedKey" TEXT NOT NULL,
         permission shared_secrets_permission_enum DEFAULT 'read',
         "sharedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      // Create refresh_tokens table  ← NOVI!
+      await queryRunner.query(`
+      CREATE TABLE refresh_tokens (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        token VARCHAR(255) NOT NULL,
+        "userId" UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "expiresAt" TIMESTAMP NOT NULL,
+        revoked BOOLEAN DEFAULT false,
+        "ipAddress" VARCHAR(45),
+        "userAgent" TEXT,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

@@ -15,12 +15,16 @@ import { CryptoService } from '../shared/services/crypto.service';
 import { AuditService } from '../shared/services/audit.service';
 import { AuditAction } from '../shared/enums';
 import { UserRole } from '../shared/enums';
+import { RefreshToken } from '../database/entities/refresh-token.entity';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(RefreshToken)
+    private refreshTokenRepository: Repository<RefreshToken>,
     private jwtService: JwtService,
     private mfaService: MfaService,
     private cryptoService: CryptoService,
@@ -79,7 +83,14 @@ export class AuthService {
 
   async login(
     loginDto: LoginDto,
-  ): Promise<{ access_token: string; user: any; requiresMfa?: boolean }> {
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    user: any;
+    requiresMfa?: boolean;
+  }> {
     const { email, password, mfaCode } = loginDto;
 
     // Pronađi korisnika
@@ -107,6 +118,7 @@ export class AuthService {
       if (!mfaCode) {
         return {
           access_token: '',
+          refresh_token: '',
           user: { id: user.id, email: user.email },
           requiresMfa: true, // Signal frontend-u da traži MFA kod
         };
@@ -130,7 +142,12 @@ export class AuthService {
       role: user.role,
     };
 
-    const access_token = this.jwtService.sign(payload);
+    const access_token = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refresh_token = await this.generateRefreshToken(
+      user.id,
+      ipAddress,
+      userAgent,
+    );
 
     // AUDIT LOG
     await this.auditService.log({
@@ -141,6 +158,7 @@ export class AuthService {
 
     return {
       access_token,
+      refresh_token,
       user: {
         id: user.id,
         email: user.email,
@@ -291,5 +309,77 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  async generateRefreshToken(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<string> {
+    const token = crypto.randomBytes(64).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 dana
+
+    await this.refreshTokenRepository.save({
+      token,
+      userId,
+      expiresAt,
+      ipAddress,
+      userAgent,
+      revoked: false,
+    });
+
+    return token;
+  }
+
+  async refreshTokens(
+    refreshToken: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    const tokenRecord = await this.refreshTokenRepository.findOne({
+      where: { token: refreshToken, revoked: false },
+      relations: ['user'],
+    });
+
+    if (!tokenRecord) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (new Date() > tokenRecord.expiresAt) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    // Revoke old token
+    tokenRecord.revoked = true;
+    await this.refreshTokenRepository.save(tokenRecord);
+
+    // Generate new tokens
+    const payload = {
+      sub: tokenRecord.user.id,
+      email: tokenRecord.user.email,
+      role: tokenRecord.user.role,
+    };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const newRefreshToken = await this.generateRefreshToken(
+      tokenRecord.user.id,
+      ipAddress,
+      userAgent,
+    );
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async logout(refreshToken: string) {
+    if (!refreshToken) {
+      return;
+    }
+    await this.refreshTokenRepository.update(
+      { token: refreshToken },
+      { revoked: true },
+    );
   }
 }
