@@ -17,6 +17,7 @@ import { AuditAction } from '../shared/enums';
 import { UserRole } from '../shared/enums';
 import { RefreshToken } from '../database/entities/refresh-token.entity';
 import * as crypto from 'crypto';
+import { AdminService } from '../admin/admin.service';
 
 @Injectable()
 export class AuthService {
@@ -29,6 +30,7 @@ export class AuthService {
     private mfaService: MfaService,
     private cryptoService: CryptoService,
     private auditService: AuditService,
+    private adminService: AdminService,
   ) {}
 
   async register(
@@ -44,6 +46,15 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
+    // VALIDACIJA PASSWORD-a prema security policy
+    const passwordValidation =
+      await this.adminService.validatePassword(password);
+    if (!passwordValidation.valid) {
+      throw new ConflictException(
+        `Password does not meet security requirements: ${passwordValidation.errors.join(', ')}`,
+      );
+    }
+
     // Hash lozinke
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -53,7 +64,7 @@ export class AuthService {
     // Enkriptuj private key sa master password-om korisnika
     const encryptedPrivateKey = this.cryptoService.encryptPrivateKey(
       privateKey,
-      password, // Master password
+      password,
     );
 
     // Kreiraj korisnika

@@ -11,9 +11,12 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { SecurityPolicy } from './database/entities/security-policy.entity';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
+    AdminModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -56,10 +59,10 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
   controllers: [AppController],
   providers: [
     AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
   ],
 })
 export class AppModule {}
