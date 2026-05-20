@@ -2,10 +2,7 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+<p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
     <p align="center">
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
@@ -23,7 +20,50 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+# Secure Vault - Backend
+
+Password Manager with Zero-Knowledge Architecture
+
+## Features
+
+### Authentication & Security
+
+- JWT authentication with access tokens
+- MFA (TOTP) via Google Authenticator
+- Role-based access control (Admin, Team Lead, Developer)
+- Redis-backed rate limiting (brute force protection)
+- Google OAuth (OIDC) integration
+- bcrypt password hashing
+
+### Cryptography
+
+- RSA 2048-bit key pair generation per user
+- Client-side encryption (zero-knowledge)
+- Private key encrypted with master password
+- Secret sharing via public key encryption
+
+### Core Functionality
+
+- Vault CRUD operations
+- Secret types: password, api_key, ssh_key, certificate, note, other
+- Favorites marking
+- Honeypot secrets with auto-freeze
+- Secret sharing (read/write permissions)
+
+### Audit & Monitoring
+
+- Immutable audit log with SHA-256 hash chain
+- Tamper detection
+- Activity tracking
+
+## Tech Stack
+
+- NestJS + TypeScript
+- PostgreSQL 16
+- Redis 7
+- TypeORM
+- Passport.js
+  ...
 
 ## Project setup
 
@@ -96,3 +136,6 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+[circleci-url]: https://circleci.com/gh/nestjs/nest
