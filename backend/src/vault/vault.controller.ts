@@ -116,4 +116,13 @@ export class VaultController {
   async getMyActivity(@Request() req) {
     return this.auditService.getLogsByUser(req.user.id, 20);
   }
+
+  @Post('test/sql-injection')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async testSqlInjection(@Request() req, @Body() body: { email: string }) {
+    // NAMJERNO RANJIV ENDPOINT ZA TESTIRANJE!
+    // NE KORISTITI U PRODUKCIJI!
+    return this.vaultService.testSqlInjection(body.email);
+  }
 }

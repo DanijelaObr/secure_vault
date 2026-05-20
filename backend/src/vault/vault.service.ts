@@ -332,4 +332,30 @@ export class VaultService {
 
     return { message: `Sharing revoked for ${targetUser.email}` };
   }
+
+  /**
+   * SQL Injection TEST endpoint - NAMJERNO RANJIV!
+   * Samo za testiranje honeypot sistema!
+   * ADMIN ONLY!
+   */
+  async testSqlInjection(email: string): Promise<any> {
+    // NAMJERNO RANJIV KOD - NE KORISTITI U PRODUKCIJI!
+    // Raw SQL query bez parametrizacije
+    const query = `SELECT * FROM users WHERE email = '${email}'`;
+
+    try {
+      const result = await this.secretRepository.query(query);
+      return {
+        message: 'SQL Injection test executed',
+        query: query,
+        results: result,
+      };
+    } catch (error: any) {
+      return {
+        message: 'SQL Injection test failed',
+        query: query,
+        error: error.message,
+      };
+    }
+  }
 }
