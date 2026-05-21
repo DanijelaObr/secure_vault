@@ -43,8 +43,17 @@ export class VaultController {
   }
 
   @Get('secrets/:id')
-  async getSecretById(@Request() req, @Param('id') secretId: string) {
-    return this.vaultService.getSecretById(req.user.id, secretId);
+  async getSecretById(@Request() req, @Param('id') id: string) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    return this.vaultService.getSecretById(
+      req.user.userId,
+      id,
+      req.user.email,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Put('secrets/:id')
@@ -53,16 +62,31 @@ export class VaultController {
     @Param('id') secretId: string,
     @Body() updateSecretDto: UpdateSecretDto,
   ) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
     return this.vaultService.updateSecret(
       req.user.id,
       secretId,
       updateSecretDto,
+      req.user.email,
+      ipAddress,
+      userAgent,
     );
   }
 
   @Delete('secrets/:id')
   async deleteSecret(@Request() req, @Param('id') secretId: string) {
-    return this.vaultService.deleteSecret(req.user.id, secretId);
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    return this.vaultService.deleteSecret(
+      req.user.id,
+      secretId,
+      req.user.email,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Post('honeypot')
@@ -81,7 +105,17 @@ export class VaultController {
     @Param('id') secretId: string,
     @Body() shareDto: ShareSecretDto,
   ) {
-    return this.vaultService.shareSecret(req.user.id, secretId, shareDto);
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    return this.vaultService.shareSecret(
+      req.user.id,
+      secretId,
+      shareDto,
+      req.user.email,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Get('shared-with-me')
@@ -95,7 +129,17 @@ export class VaultController {
     @Param('id') secretId: string,
     @Param('email') email: string,
   ) {
-    return this.vaultService.revokeShare(req.user.id, secretId, email);
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+
+    return this.vaultService.revokeShare(
+      req.user.id,
+      secretId,
+      email,
+      req.user.email,
+      ipAddress,
+      userAgent,
+    );
   }
 
   @Get('audit/recent')

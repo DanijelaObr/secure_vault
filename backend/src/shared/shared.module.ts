@@ -6,10 +6,11 @@ import { SecurityService } from './services/security.service';
 import { AuditLog } from '../database/entities/audit-log.entity';
 import { SuspiciousActivity } from '../database/entities/suspicious-activity.entity';
 import { BannedIP } from '../database/entities/banned-ip.entity';
+import { EmailService } from './services/email.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AuditLog, SuspiciousActivity, BannedIP])],
-  providers: [CryptoService, AuditService, SecurityService],
-  exports: [CryptoService, AuditService, SecurityService],
+  providers: [CryptoService, AuditService, SecurityService, EmailService],
+  exports: [CryptoService, AuditService, SecurityService, EmailService],
 })
 export class SharedModule {}
