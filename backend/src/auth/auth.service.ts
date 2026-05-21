@@ -18,6 +18,8 @@ import { UserRole } from '../shared/enums';
 import { RefreshToken } from '../database/entities/refresh-token.entity';
 import * as crypto from 'crypto';
 import { AdminService } from '../admin/admin.service';
+import { SecurityService } from '../shared/services/security.service';
+import { ActivityType } from '../database/entities/suspicious-activity.entity';
 
 @Injectable()
 export class AuthService {
@@ -31,6 +33,7 @@ export class AuthService {
     private cryptoService: CryptoService,
     private auditService: AuditService,
     private adminService: AdminService,
+    private securityService: SecurityService,
   ) {}
 
   async register(
@@ -106,6 +109,7 @@ export class AuthService {
 
     // Pronađi korisnika
     const user = await this.userRepository.findOne({ where: { email } });
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -119,7 +123,15 @@ export class AuthService {
 
     // Provjeri lozinku
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
     if (!isPasswordValid) {
+      await this.securityService.logSuspiciousActivity(
+        ipAddress || 'unknown',
+        ActivityType.FAILED_LOGIN,
+        undefined,
+        userAgent,
+        `Failed login attempt for email: ${email}`,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -138,6 +150,14 @@ export class AuthService {
       // Validiraj MFA kod
       const isValidMfa = this.mfaService.verifyToken(mfaCode, user.mfaSecret!);
       if (!isValidMfa) {
+        await this.securityService.logSuspiciousActivity(
+          ipAddress || 'unknown',
+          ActivityType.FAILED_LOGIN,
+          user.id,
+          userAgent,
+          'Invalid MFA code',
+        );
+
         throw new UnauthorizedException('Invalid MFA code');
       }
     }

@@ -11,6 +11,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { MfaService } from './mfa.service';
 import { RefreshToken } from '../database/entities/refresh-token.entity';
 import { AdminModule } from '../admin/admin.module';
+import { SharedModule } from 'src/shared/shared.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AdminModule } from '../admin/admin.module';
       }),
     }),
     AdminModule,
+    SharedModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, MfaService],

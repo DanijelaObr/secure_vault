@@ -35,6 +35,9 @@ export class AppController {
       DROP TYPE IF EXISTS audit_logs_action_enum CASCADE;
       DROP TYPE IF EXISTS shared_secrets_permission_enum CASCADE;
       DROP TABLE IF EXISTS security_policies CASCADE;
+      DROP TABLE IF EXISTS banned_ips CASCADE;
+      DROP TABLE IF EXISTS suspicious_activities CASCADE;
+      DROP TYPE IF EXISTS activity_type_enum CASCADE;
     `);
 
       // Create enums
@@ -150,6 +153,36 @@ export class AppController {
   -- Insert default policy
   INSERT INTO security_policies (id) VALUES (uuid_generate_v4());
 `);
+
+      // Create activity type enum
+      await queryRunner.query(`
+        CREATE TYPE activity_type_enum AS ENUM('failed_login', 'failed_decryption', 'expired_token_use', 'honeypot_access');
+`);
+
+      // Create suspicious_activities table
+      await queryRunner.query(`
+        CREATE TABLE suspicious_activities (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        "ipAddress" VARCHAR(45) NOT NULL,
+        "activityType" activity_type_enum NOT NULL,
+        "userId" UUID,
+        "userAgent" TEXT,
+        details TEXT,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+      // Create banned_ips table
+      await queryRunner.query(`
+        CREATE TABLE banned_ips (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        "ipAddress" VARCHAR(45) UNIQUE NOT NULL,
+        reason TEXT NOT NULL,
+        "bannedUntil" TIMESTAMP,
+        permanent BOOLEAN DEFAULT false,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+ `);
       await queryRunner.commitTransaction();
 
       return {

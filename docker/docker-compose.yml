@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "54320:5432" # ← DRUGI PORT!
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -18,7 +18,7 @@ services:
     container_name: secure-vault-redis
     command: redis-server
     ports:
-      - "63790:6379" # ← DRUGI PORT!
+      - "63790:6379"
     volumes:
       - redis_data:/data
 

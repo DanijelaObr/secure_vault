@@ -13,6 +13,7 @@ import { ThrottlerStorageRedisService } from 'nestjs-throttler-storage-redis';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { SecurityPolicy } from './database/entities/security-policy.entity';
 import { AdminModule } from './admin/admin.module';
+import { IPBanGuard } from './auth/guards/ip-ban.guard';
 
 @Module({
   imports: [
@@ -63,6 +64,10 @@ import { AdminModule } from './admin/admin.module';
     //   provide: APP_GUARD,
     //   useClass: ThrottlerGuard,
     // },
+    {
+      provide: APP_GUARD,
+      useClass: IPBanGuard,
+    },
   ],
 })
 export class AppModule {}
