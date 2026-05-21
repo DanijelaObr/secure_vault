@@ -15,6 +15,7 @@ import { CryptoService } from '../shared/services/crypto.service';
 import { SharedSecretPermission } from 'src/shared/enums';
 import { AuditService } from '../shared/services/audit.service';
 import { AuditAction } from '../shared/enums';
+import { EmailService } from 'src/shared/services/email.service';
 
 @Injectable()
 export class VaultService {
@@ -25,6 +26,7 @@ export class VaultService {
     private sharedSecretRepository: Repository<SharedSecret>,
     private cryptoService: CryptoService,
     private auditService: AuditService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -64,7 +66,13 @@ export class VaultService {
   /**
    * Dohvati JEDNU tajnu (samo ako je vlasnik!)
    */
-  async getSecretById(userId: string, secretId: string): Promise<Secret> {
+  async getSecretById(
+    userId: string,
+    secretId: string,
+    userEmail: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<Secret> {
     const secret = await this.secretRepository.findOne({
       where: { id: secretId },
       relations: ['owner'],
@@ -74,9 +82,8 @@ export class VaultService {
       throw new NotFoundException('Secret not found');
     }
 
-    // ===== HONEYPOT DETEKCIJA =====
+    // HONEYPOT DETEKCIJA
     if (secret.isHoneypot) {
-      // Loguj honeypot pristup
       console.warn(
         `HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
       );
@@ -89,16 +96,16 @@ export class VaultService {
         metadata: { secretTitle: secret.title },
       });
 
-      // Freeze korisnikov account ODMAH!
+      // Freeze user account
       await this.freezeUserAccount(userId);
 
-      await this.auditService.log({
-        action: AuditAction.SECRET_READ,
-        userId,
-        secretId: secret.id,
-      });
-
-      // TODO: Poslati alert admin-u (email, SMS, itd.)
+      // SEND EMAIL ALERT
+      await this.emailService.sendHoneypotAlert(
+        userEmail,
+        secret.title,
+        ipAddress || 'unknown',
+        userAgent || 'unknown',
+      );
 
       throw new ForbiddenException(
         'This account has been frozen due to suspicious activity. Contact administrator.',
@@ -124,8 +131,17 @@ export class VaultService {
     userId: string,
     secretId: string,
     updateSecretDto: UpdateSecretDto,
+    userEmail: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<Secret> {
-    const secret = await this.getSecretById(userId, secretId);
+    const secret = await this.getSecretById(
+      userId,
+      secretId,
+      userEmail,
+      ipAddress,
+      userAgent,
+    );
 
     Object.assign(secret, updateSecretDto);
     const updatedSecret = await this.secretRepository.save(secret);
@@ -160,8 +176,17 @@ export class VaultService {
   async deleteSecret(
     userId: string,
     secretId: string,
+    userEmail: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<{ message: string }> {
-    const secret = await this.getSecretById(userId, secretId);
+    const secret = await this.getSecretById(
+      userId,
+      secretId,
+      userEmail,
+      ipAddress,
+      userAgent,
+    );
 
     await this.secretRepository.remove(secret);
 
@@ -211,8 +236,17 @@ export class VaultService {
     ownerId: string,
     secretId: string,
     shareDto: ShareSecretDto,
+    ownerEmail: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<{ message: string }> {
-    const secret = await this.getSecretById(ownerId, secretId);
+    const secret = await this.getSecretById(
+      ownerId,
+      secretId,
+      ownerEmail,
+      ipAddress,
+      userAgent,
+    );
 
     const userRepository = this.secretRepository.manager.getRepository(User);
     const targetUser = await userRepository.findOne({
@@ -298,8 +332,17 @@ export class VaultService {
     ownerId: string,
     secretId: string,
     sharedWithEmail: string,
+    ownerEmail: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<{ message: string }> {
-    await this.getSecretById(ownerId, secretId);
+    await this.getSecretById(
+      ownerId,
+      secretId,
+      ownerEmail,
+      ipAddress,
+      userAgent,
+    );
 
     const userRepository = this.secretRepository.manager.getRepository(User);
     const targetUser = await userRepository.findOne({
