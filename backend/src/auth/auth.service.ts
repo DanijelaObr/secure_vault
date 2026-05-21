@@ -153,7 +153,12 @@ export class AuthService {
       role: user.role,
     };
 
-    const access_token = this.jwtService.sign(payload, { expiresIn: '15m' });
+    // Čitaj trajanje iz security policy
+    const policy = await this.adminService.getSecurityPolicy();
+    const access_token = this.jwtService.sign(payload, {
+      expiresIn: `${policy.accessTokenDuration}m`,
+    });
+
     const refresh_token = await this.generateRefreshToken(
       user.id,
       ipAddress,
@@ -328,8 +333,10 @@ export class AuthService {
     userAgent?: string,
   ): Promise<string> {
     const token = crypto.randomBytes(64).toString('hex');
+
+    const policy = await this.adminService.getSecurityPolicy();
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 dana
+    expiresAt.setMinutes(expiresAt.getMinutes() + policy.refreshTokenDuration);
 
     await this.refreshTokenRepository.save({
       token,
@@ -371,7 +378,11 @@ export class AuthService {
       email: tokenRecord.user.email,
       role: tokenRecord.user.role,
     };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const policy = await this.adminService.getSecurityPolicy();
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: `${policy.accessTokenDuration}m`,
+    });
+
     const newRefreshToken = await this.generateRefreshToken(
       tokenRecord.user.id,
       ipAddress,
