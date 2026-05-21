@@ -16,10 +16,14 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import type { Response } from 'express';
+import { AdminService } from '../admin/admin.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly adminService: AdminService,
+  ) {}
 
   @Post('register')
   @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 registracije na sat
@@ -39,13 +43,16 @@ export class AuthController {
 
     const result = await this.authService.login(loginDto, ipAddress, userAgent);
 
+    // Get policy for cookie durations
+    const policy = await this.adminService.getSecurityPolicy();
+
     // Set HttpOnly cookies
     if (result.access_token) {
       res.cookie('accessToken', result.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000, // 15 min
+        maxAge: policy.accessTokenDuration * 60 * 1000,
       });
     }
 
@@ -54,7 +61,7 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: policy.refreshTokenDuration * 60 * 1000,
       });
     }
 
@@ -128,18 +135,20 @@ export class AuthController {
       userAgent,
     );
 
+    const policy = await this.adminService.getSecurityPolicy();
+
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000,
+      maxAge: policy.accessTokenDuration * 60 * 1000,
     });
 
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: policy.refreshTokenDuration * 60 * 1000,
     });
 
     return { message: 'Tokens refreshed' };
