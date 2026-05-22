@@ -10,14 +10,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { user, loading } = useAuth();
-  console.log("ProtectedRoute check:", { user, loading });
 
   if (loading) {
     return <div>Loading...</div>;
   }
 
   if (!user) {
-    console.log("No user, redirecting to login");
     return <Navigate to="/login" replace />;
   }
 

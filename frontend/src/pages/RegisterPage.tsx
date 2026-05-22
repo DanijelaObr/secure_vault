@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import "../styles/RegisterPage.css";
 
 const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -40,68 +41,58 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
+    <div className="register-container">
       <h1>SecureVault Register</h1>
 
-      {error && (
-        <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>
-      )}
+      {error && <div className="error-message">{error}</div>}
 
       <form onSubmit={handleRegister}>
-        <div style={{ marginBottom: "15px" }}>
+        <div className="form-group">
           <label>Email:</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ width: "100%", padding: "8px", marginTop: "5px" }}
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
+        <div className="form-group">
           <label>Username:</label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            style={{ width: "100%", padding: "8px", marginTop: "5px" }}
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
+        <div className="form-group">
           <label>Password:</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{ width: "100%", padding: "8px", marginTop: "5px" }}
           />
         </div>
 
-        <div style={{ marginBottom: "15px" }}>
+        <div className="form-group">
           <label>Confirm Password:</label>
           <input
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            style={{ width: "100%", padding: "8px", marginTop: "5px" }}
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ width: "100%", padding: "10px" }}
-        >
+        <button type="submit" disabled={loading} className="submit-button">
           {loading ? "Registering..." : "Register"}
         </button>
       </form>
 
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
+      <div className="auth-link">
         Already have an account? <Link to="/login">Login</Link>
       </div>
     </div>

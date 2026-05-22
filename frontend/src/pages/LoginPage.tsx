@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import "../styles/LoginPage.css";
 
 const LoginPage: React.FC = () => {
-  console.log("LoginPage rendered!");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaToken, setMfaToken] = useState("");
@@ -20,20 +19,15 @@ const LoginPage: React.FC = () => {
     setError("");
     setLoading(true);
 
-    console.log("Attempting login with:", email);
-
     try {
       const result = await login(email, password);
-      console.log("Login result:", result);
 
       if (result.requireMfa) {
         setRequireMfa(true);
       } else if (result.success && result.user) {
-        // Sačekaj da se state ažurira
         navigate("/dashboard");
       }
     } catch (err: any) {
-      console.error("Login error:", err);
       setError(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
@@ -56,48 +50,40 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px" }}>
+    <div className="login-container">
       <h1>SecureVault Login</h1>
 
-      {error && (
-        <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>
-      )}
+      {error && <div className="error-message">{error}</div>}
 
       {!requireMfa ? (
         <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: "15px" }}>
+          <div className="form-group">
             <label>Email:</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
             />
           </div>
 
-          <div style={{ marginBottom: "15px" }}>
+          <div className="form-group">
             <label>Password:</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ width: "100%", padding: "10px" }}
-          >
+          <button type="submit" disabled={loading} className="submit-button">
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
       ) : (
         <form onSubmit={handleMfaVerify}>
-          <div style={{ marginBottom: "15px" }}>
+          <div className="form-group">
             <label>MFA Token:</label>
             <input
               type="text"
@@ -105,21 +91,16 @@ const LoginPage: React.FC = () => {
               onChange={(e) => setMfaToken(e.target.value)}
               required
               placeholder="Enter 6-digit code"
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ width: "100%", padding: "10px" }}
-          >
+          <button type="submit" disabled={loading} className="submit-button">
             {loading ? "Verifying..." : "Verify MFA"}
           </button>
         </form>
       )}
 
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
+      <div className="auth-link">
         Don't have an account? <Link to="/register">Register</Link>
       </div>
     </div>

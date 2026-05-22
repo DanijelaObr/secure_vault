@@ -1,0 +1,163 @@
+.dashboard-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  color: #333;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.user-info {
+  margin-right: 20px;
+  font-weight: 500;
+  color: #555;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-primary:hover {
+  background-color: #1565c0;
+}
+
+.btn-danger {
+  padding: 10px 20px;
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-danger:hover {
+  background-color: #c62828;
+}
+
+.error-message {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  border-left: 4px solid #d32f2f;
+}
+
+.secrets-section h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 16px;
+}
+
+.secrets-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.secrets-table thead {
+  background-color: #f5f5f5;
+}
+
+.secrets-table th {
+  text-align: left;
+  padding: 15px;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.secrets-table td {
+  padding: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+}
+
+.secrets-table tbody tr:hover {
+  background-color: #fafafa;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-view {
+  background-color: #1976d2;
+  color: white;
+}
+
+.btn-view:hover {
+  background-color: #1565c0;
+}
+
+.btn-edit {
+  background-color: #f57c00;
+  color: white;
+}
+
+.btn-edit:hover {
+  background-color: #ef6c00;
+}
+
+.btn-delete {
+  background-color: #d32f2f;
+  color: white;
+}
+
+.btn-delete:hover {
+  background-color: #c62828;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #666;
+}

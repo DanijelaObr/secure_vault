@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { vaultService } from "../services/vaultService";
 import type { Secret } from "../types";
+import "../styles/DashboardPage.css";
 
 const DashboardPage: React.FC = () => {
   const [secrets, setSecrets] = useState<Secret[]>([]);
@@ -18,11 +19,6 @@ const DashboardPage: React.FC = () => {
 
   const loadSecrets = async () => {
     try {
-      console.log(
-        "Loading secrets with token:",
-        localStorage.getItem("accessToken"),
-      ); // DODAJ
-
       const data = await vaultService.getAllSecrets();
       setSecrets(data);
     } catch (err: any) {
@@ -48,80 +44,78 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="loading">Loading...</div>;
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
+    <div className="dashboard-container">
+      <div className="dashboard-header">
         <h1>SecureVault Dashboard</h1>
-        <div>
-          <span style={{ marginRight: "20px" }}>Welcome, {user?.username}</span>
+        <div className="dashboard-actions">
+          <span className="user-info">Welcome, {user?.username}</span>
           <button
             onClick={() => navigate("/vault/create")}
-            style={{ marginRight: "10px" }}
+            className="btn-primary"
           >
             Create Secret
           </button>
-          <button onClick={handleLogout}>Logout</button>
+          <button onClick={handleLogout} className="btn-danger">
+            Logout
+          </button>
         </div>
       </div>
 
-      {error && (
-        <div style={{ color: "red", marginBottom: "10px" }}>{error}</div>
-      )}
+      {error && <div className="error-message">{error}</div>}
 
-      <div>
+      <div className="secrets-section">
         <h2>Your Secrets ({secrets.length})</h2>
 
         {secrets.length === 0 ? (
-          <p>No secrets yet. Create your first one!</p>
+          <div className="empty-state">
+            No secrets yet. Create your first one!
+          </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="secrets-table">
             <thead>
-              <tr style={{ borderBottom: "2px solid #ccc" }}>
-                <th style={{ textAlign: "left", padding: "10px" }}>Title</th>
-                <th style={{ textAlign: "left", padding: "10px" }}>Type</th>
-                <th style={{ textAlign: "left", padding: "10px" }}>Username</th>
-                <th style={{ textAlign: "left", padding: "10px" }}>
-                  Last Accessed
-                </th>
-                <th style={{ textAlign: "left", padding: "10px" }}>Actions</th>
+              <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Username</th>
+                <th>Last Accessed</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {secrets.map((secret) => (
-                <tr key={secret.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "10px" }}>{secret.title}</td>
-                  <td style={{ padding: "10px" }}>{secret.type}</td>
-                  <td style={{ padding: "10px" }}>{secret.username || "-"}</td>
-                  <td style={{ padding: "10px" }}>
+                <tr key={secret.id}>
+                  <td>{secret.title}</td>
+                  <td>{secret.type}</td>
+                  <td>{secret.username || "-"}</td>
+                  <td>
                     {secret.lastAccessedAt
                       ? new Date(secret.lastAccessedAt).toLocaleDateString()
                       : "Never"}
                   </td>
-                  <td style={{ padding: "10px" }}>
-                    <button
-                      onClick={() => navigate(`/vault/view/${secret.id}`)}
-                      style={{ marginRight: "5px" }}
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => navigate(`/vault/edit/${secret.id}`)}
-                      style={{ marginRight: "5px" }}
-                    >
-                      Edit
-                    </button>
-                    <button onClick={() => handleDelete(secret.id)}>
-                      Delete
-                    </button>
+                  <td>
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => navigate(`/vault/view/${secret.id}`)}
+                        className="btn-small btn-view"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => navigate(`/vault/edit/${secret.id}`)}
+                        className="btn-small btn-edit"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(secret.id)}
+                        className="btn-small btn-delete"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -46,34 +46,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const login = async (email: string, password: string) => {
-    console.log("1. Login function called with:", email);
-
     try {
       const response = await api.post("/auth/login", { email, password });
-      console.log("2. Full response:", response);
-      console.log("3. Response data:", response.data);
 
       if (response.data.requiresMfa) {
-        console.log("4. MFA required");
         return { requireMfa: true };
       }
 
-      console.log("5. Extracting tokens...");
       const { access_token, user } = response.data;
-      console.log("6. Access token:", access_token);
-      console.log("7. User:", user);
 
-      console.log("8. Saving to localStorage...");
       localStorage.setItem("accessToken", access_token);
-      console.log("9. Token saved:", localStorage.getItem("accessToken"));
 
       api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
       setUser(user);
 
-      console.log("10. Login complete!");
       return { success: true, user };
     } catch (error) {
-      console.error("LOGIN ERROR:", error);
       throw error;
     }
   };
