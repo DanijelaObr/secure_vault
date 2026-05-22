@@ -1,141 +1,281 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Secure Vault - Backend Setup
 
-<p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Prerequisites
 
-## Description
+- Docker & Docker Compose
+- Node.js 20+ (for local development)
+- npm or yarn
 
-# Secure Vault - Backend
+---
 
-Password Manager with Zero-Knowledge Architecture
+## Getting Started
 
-## Features
-
-### Authentication & Security
-
-- JWT authentication with access tokens
-- MFA (TOTP) via Google Authenticator
-- Role-based access control (Admin, Team Lead, Developer)
-- Redis-backed rate limiting (brute force protection)
-- Google OAuth (OIDC) integration
-- bcrypt password hashing
-
-### Cryptography
-
-- RSA 2048-bit key pair generation per user
-- Client-side encryption (zero-knowledge)
-- Private key encrypted with master password
-- Secret sharing via public key encryption
-
-### Core Functionality
-
-- Vault CRUD operations
-- Secret types: password, api_key, ssh_key, certificate, note, other
-- Favorites marking
-- Honeypot secrets with auto-freeze
-- Secret sharing (read/write permissions)
-
-### Audit & Monitoring
-
-- Immutable audit log with SHA-256 hash chain
-- Tamper detection
-- Activity tracking
-
-## Tech Stack
-
-- NestJS + TypeScript
-- PostgreSQL 16
-- Redis 7
-- TypeORM
-- Passport.js
-  ...
-
-## Project setup
+### Option 1: With Docker Compose (Recommended)
 
 ```bash
-$ npm install
+# Copy environment file
+cp .env.example .env
+
+# Edit .env with your credentials
+nano .env
+
+# Start all services (PostgreSQL + Redis + Backend)
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f backend
+
+# Initialize database
+curl -X POST http://localhost:3000/setup-database
 ```
 
-## Compile and run the project
+**Backend:** `http://localhost:3000`
+
+**PostgreSQL:** `localhost:5433`
+
+**Redis:** `localhost:63790`
+
+---
+
+### Option 2: Local Development (without Docker)
 
 ```bash
-# development
-$ npm run start
+# Start only database and Redis
+docker-compose up -d postgres redis
 
-# watch mode
-$ npm run start:dev
+# Install dependencies
+npm install
 
-# production mode
-$ npm run start:prod
+# Start development server
+npm run start:dev
+
+# Backend will be available at http://localhost:3000
 ```
 
-## Run tests
+---
+
+## Testing Endpoints
+
+### User Registration
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@test.com",
+    "username": "Admin User",
+    "password": "StrongPass123!",
+    "role": "admin"
+  }'
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Login
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@test.com",
+    "password": "StrongPass123!"
+  }'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Enable MFA
 
-## Resources
+```bash
+curl -X POST http://localhost:3000/auth/mfa/enable \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### SQL Injection Test (Honeypot)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+curl -X POST http://localhost:3000/vault/test/sql-injection \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"email": "test@test.com OR 1=1"}'
+```
+
+---
+
+## Project Structure
+
+```
+backend/
+├── src/
+│   ├── admin/              # Admin functionality and security policies
+│   ├── auth/               # Authentication (JWT, MFA, Google OAuth)
+│   ├── vault/              # Secret management (CRUD, sharing)
+│   ├── shared/
+│   │   ├── services/
+│   │   │   ├── audit.service.ts      # Immutable audit log
+│   │   │   ├── crypto.service.ts     # Cryptography (RSA, AES)
+│   │   │   ├── email.service.ts      # Email notifications
+│   │   │   └── security.service.ts   # IP ban, suspicious activity
+│   │   └── enums/
+│   └── database/
+│       └── entities/       # TypeORM entities
+├── docker-compose.yml
+├── Dockerfile
+├── .env
+└── package.json
+```
+
+---
+
+## Key Features
+
+### Implemented Functionality
+
+- **Zero-Knowledge Vault** - Server never sees decrypted secrets
+- **MFA (TOTP)** - Google Authenticator compatible
+- **OIDC (Google OAuth)** - Login via Google account
+- **Secure Sharing** - Asymmetric cryptography (RSA)
+- **Rate Limiting** - Redis-based throttling
+- **IP Banning** - Automatic ban after suspicious activities
+- **Honeypot System** - Fake secrets for intrusion detection
+- **Immutable Audit Log** - Blockchain-style hash chain
+- **SQL Injection Test Endpoint** - For honeypot demonstration
+- **Session Rotation** - Access & Refresh token rotation
+- **Security Policies** - Configurable password policies, session duration
+
+---
+
+## Useful Commands
+
+```bash
+# Rebuild backend container
+docker-compose up -d --build backend
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (WARNING - deletes database!)
+docker-compose down -v
+
+# Check container status
+docker-compose ps
+
+# Access PostgreSQL
+docker exec -it secure-vault-postgres psql -U postgres -d secure_vault
+
+# Access Redis CLI
+docker exec -it secure-vault-redis redis-cli
+
+# View backend logs in real-time
+docker-compose logs -f backend
+```
+
+---
+
+## Email Testing
+
+All emails can be viewed on **Mailtrap inbox** :
+
+- URL: https://mailtrap.io/inboxes
+- Login with credentials from .env
+
+**Email types:**
+
+- Honeypot trigger (admin alert)
+- Account frozen notification
+- MFA setup
+
+---
+
+## Security Notes
+
+### Development (.env current configuration)
+
+Safe for local testing
+
+### Production
+
+**MUST CHANGE:**
+
+- `JWT_SECRET` - Generate new: `openssl rand -base64 64`
+- `DB_PASSWORD` - Use strong password
+- `GOOGLE_CLIENT_SECRET` - Create new OAuth application
+- `SMTP_*` - Use real SMTP server (not Mailtrap)
+
+---
+
+## Debugging
+
+### Backend won't start
+
+```bash
+# Check logs
+docker-compose logs backend
+
+# Common issues:
+# - Database not ready -> Wait 10-15s, health check will resolve
+# - Port already in use -> Change in docker-compose.yml
+```
+
+### Cannot connect to database
+
+```bash
+# Check if PostgreSQL is ready
+docker exec secure-vault-postgres pg_isready -U postgres
+
+# If not, restart
+docker-compose restart postgres
+```
+
+### Rate limit error
+
+```bash
+# Clear Redis
+docker exec secure-vault-redis redis-cli FLUSHALL
+```
+
+---
+
+## API Documentation
+
+**Auth Endpoints:**
+
+- `POST /auth/register` - User registration
+- `POST /auth/login` - Login (returns access + refresh token)
+- `POST /auth/refresh` - Refresh token
+- `POST /auth/logout` - Logout
+- `POST /auth/mfa/enable` - Enable MFA
+- `POST /auth/mfa/verify` - Verify MFA code
+- `POST /auth/mfa/disable` - Disable MFA
+- `GET /auth/google` - Google OAuth redirect
+- `GET /auth/google/callback` - Google OAuth callback
+
+**Vault Endpoints:**
+
+- `POST /vault/secrets` - Create secret
+- `GET /vault/secrets` - Get all secrets
+- `GET /vault/secrets/:id` - Get single secret
+- `PATCH /vault/secrets/:id` - Update secret
+- `DELETE /vault/secrets/:id` - Delete secret
+- `POST /vault/secrets/:id/share` - Share secret
+- `POST /vault/honeypot` - Create honeypot (admin only)
+- `POST /vault/test/sql-injection` - SQL Injection test
+
+**Admin Endpoints:**
+
+- `GET /admin/security-policy` - Get security policy
+- `PATCH /admin/security-policy` - Update policy
+- `GET /admin/audit-logs` - Get audit logs
+- `GET /admin/audit-logs/verify` - Verify log integrity
+
+---
 
 ## Support
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+For questions about this project:
 
-## Stay in touch
+- GitHub Issues
+- Email: admin@securevault.com
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
-## License
+**Version:** 1.0.0
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**Author:** Danijela Obradovic
