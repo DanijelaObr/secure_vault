@@ -115,18 +115,6 @@ export class VaultService {
     }
 
     // Provjeri da li je korisnik vlasnik
-    console.log('Test TEST Test TEST');
-    console.log(secret.ownerId);
-    console.log(userId);
-
-    console.log('=== OWNERSHIP CHECK ===');
-    console.log('secret.ownerId:', secret.ownerId);
-    console.log('userId:', userId);
-    console.log('typeof secret.ownerId:', typeof secret.ownerId);
-    console.log('typeof userId:', typeof userId);
-    console.log('Are equal (===):', secret.ownerId === userId);
-    console.log('Are equal (==):', secret.ownerId == userId);
-
     if (secret.ownerId !== userId) {
       throw new ForbiddenException('You do not have access to this secret');
     }
@@ -202,8 +190,6 @@ export class VaultService {
       userAgent,
     );
 
-    await this.secretRepository.remove(secret);
-
     // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_DELETE,
@@ -211,6 +197,8 @@ export class VaultService {
       secretId,
       metadata: { title: secret.title },
     });
+
+    await this.secretRepository.remove(secret);
 
     return { message: 'Secret deleted successfully' };
   }
