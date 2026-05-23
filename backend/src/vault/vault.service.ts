@@ -82,6 +82,8 @@ export class VaultService {
       throw new NotFoundException('Secret not found');
     }
 
+    console.log('Secret found:', secret ? 'YES' : 'NO');
+
     // HONEYPOT DETEKCIJA
     if (secret.isHoneypot) {
       console.warn(
@@ -113,6 +115,18 @@ export class VaultService {
     }
 
     // Provjeri da li je korisnik vlasnik
+    console.log('Test TEST Test TEST');
+    console.log(secret.ownerId);
+    console.log(userId);
+
+    console.log('=== OWNERSHIP CHECK ===');
+    console.log('secret.ownerId:', secret.ownerId);
+    console.log('userId:', userId);
+    console.log('typeof secret.ownerId:', typeof secret.ownerId);
+    console.log('typeof userId:', typeof userId);
+    console.log('Are equal (===):', secret.ownerId === userId);
+    console.log('Are equal (==):', secret.ownerId == userId);
+
     if (secret.ownerId !== userId) {
       throw new ForbiddenException('You do not have access to this secret');
     }

@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import CreateSecretPage from "./pages/CreateSecretPage";
+import ViewSecretPage from "./pages/ViewSecretPage";
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -45,6 +46,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <CreateSecretPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/vault/view/:id"
+            element={
+              <ProtectedRoute>
+                <ViewSecretPage />
               </ProtectedRoute>
             }
           />

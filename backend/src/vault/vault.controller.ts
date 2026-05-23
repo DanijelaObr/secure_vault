@@ -48,7 +48,7 @@ export class VaultController {
     const userAgent = req.headers['user-agent'];
 
     return this.vaultService.getSecretById(
-      req.user.userId,
+      req.user.id,
       id,
       req.user.email,
       ipAddress,

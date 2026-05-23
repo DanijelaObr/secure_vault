@@ -56,7 +56,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const { access_token, user } = response.data;
 
       localStorage.setItem("accessToken", access_token);
-      console.log(localStorage.getItem("accessToken"));
 
       api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
       setUser(user);
