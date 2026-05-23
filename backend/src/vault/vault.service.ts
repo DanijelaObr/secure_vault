@@ -82,6 +82,8 @@ export class VaultService {
       throw new NotFoundException('Secret not found');
     }
 
+    console.log('Secret found:', secret ? 'YES' : 'NO');
+
     // HONEYPOT DETEKCIJA
     if (secret.isHoneypot) {
       console.warn(
@@ -188,8 +190,6 @@ export class VaultService {
       userAgent,
     );
 
-    await this.secretRepository.remove(secret);
-
     // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_DELETE,
@@ -197,6 +197,8 @@ export class VaultService {
       secretId,
       metadata: { title: secret.title },
     });
+
+    await this.secretRepository.remove(secret);
 
     return { message: 'Secret deleted successfully' };
   }

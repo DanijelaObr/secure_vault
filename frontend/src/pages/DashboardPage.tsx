@@ -3,12 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { vaultService } from "../services/vaultService";
 import type { Secret } from "../types";
+import ConfirmModal from "../components/ConfirmModal";
 import "../styles/DashboardPage.css";
 
 const DashboardPage: React.FC = () => {
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [secretToDelete, setSecretToDelete] = useState<string | null>(null);
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -33,14 +36,26 @@ const DashboardPage: React.FC = () => {
     navigate("/login");
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this secret?")) return;
+  const openDeleteModal = (id: string) => {
+    setSecretToDelete(id);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setSecretToDelete(null);
+    setDeleteModalOpen(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!secretToDelete) return;
 
     try {
-      await vaultService.deleteSecret(id);
-      setSecrets(secrets.filter((s) => s.id !== id));
+      await vaultService.deleteSecret(secretToDelete);
+      setSecrets(secrets.filter((s) => s.id !== secretToDelete));
+      closeDeleteModal();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to delete secret");
+      closeDeleteModal();
     }
   };
 
@@ -110,7 +125,7 @@ const DashboardPage: React.FC = () => {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(secret.id)}
+                        onClick={() => openDeleteModal(secret.id)}
                         className="btn-small btn-delete"
                       >
                         Delete
@@ -123,6 +138,16 @@ const DashboardPage: React.FC = () => {
           </table>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Secret"
+        message="Are you sure you want to delete this secret? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={closeDeleteModal}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
     </div>
   );
 };
