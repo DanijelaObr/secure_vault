@@ -28,20 +28,29 @@ export class User {
   })
   role!: UserRole;
 
-  // Public key za asimetričnu kriptografiju (dijeljenje tajni)
+  // ===== ZERO-KNOWLEDGE KRIPTO POLJA =====
+  // Sve generiše KLIJENT pri registraciji. Server samo skladišti.
+
+  // Javni ključ (base64 spki) — koristi se za dijeljenje tajni.
   @Column({ type: 'text' })
   publicKey!: string;
 
-  // Enkriptovani private key (enkriptovan master password-om korisnika)
+  // Privatni ključ enkriptovan master ključem NA KLIJENTU (JSON blob: { iv, data }).
+  // Server NE može da ga dekriptuje jer nema master password.
   @Column({ type: 'text' })
   encryptedPrivateKey!: string;
+
+  // Salt za PBKDF2 (base64). Potreban klijentu da izvede master ključ pri loginu.
+  // Salt nije tajna — bezbedno je čuvati ga na serveru.
+  @Column({ type: 'text', nullable: true })
+  salt!: string | null;
 
   // MFA
   @Column({ default: false })
   mfaEnabled!: boolean;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  mfaSecret!: string | null; // TOTP secret (enkriptovan)
+  mfaSecret!: string | null; // TOTP secret
 
   // Account status
   @Column({ default: true })

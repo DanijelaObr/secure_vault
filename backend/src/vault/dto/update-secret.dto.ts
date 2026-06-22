@@ -11,6 +11,10 @@ export class UpdateSecretDto {
   encryptedData?: string;
 
   @IsOptional()
+  @IsString()
+  encryptedKey?: string;
+
+  @IsOptional()
   @IsEnum(SecretType)
   type?: SecretType;
 
@@ -21,10 +25,6 @@ export class UpdateSecretDto {
   @IsOptional()
   @IsString()
   username?: string;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
 
   @IsOptional()
   @IsBoolean()

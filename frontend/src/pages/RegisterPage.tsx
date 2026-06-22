@@ -8,6 +8,9 @@ const RegisterPage: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "team_lead" | "developer">(
+    "developer",
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,15 +26,11 @@ const RegisterPage: React.FC = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-
     setLoading(true);
-
     try {
-      await register(email, username, password);
+      // Master password se NE šalje na server u čistom obliku za kripto —
+      // ključevi se generišu ovdje (u browseru) prije slanja.
+      await register({ email, username, password, role });
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.response?.data?.message || "Registration failed");
@@ -68,13 +67,26 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div className="form-group">
-          <label>Password:</label>
+          <label>Role:</label>
+          <select value={role} onChange={(e) => setRole(e.target.value as any)}>
+            <option value="developer">Developer</option>
+            <option value="team_lead">Team Lead</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Master Password:</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <small>
+            Ovom lozinkom se enkriptuju tvoje tajne. Ako je zaboraviš, podaci se
+            ne mogu povratiti.
+          </small>
         </div>
 
         <div className="form-group">
@@ -88,7 +100,7 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <button type="submit" disabled={loading} className="submit-button">
-          {loading ? "Registering..." : "Register"}
+          {loading ? "Generating keys..." : "Register"}
         </button>
       </form>
 

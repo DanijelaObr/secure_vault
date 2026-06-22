@@ -12,6 +12,29 @@ export class AuditService {
     private auditLogRepository: Repository<AuditLog>,
   ) {}
 
+  /**
+   * Računa hash zapisa SAMO iz polja koja se trajno čuvaju u bazi.
+   * Time se isti hash može kasnije preračunati pri verifikaciji.
+   */
+  private computeHash(fields: {
+    action: string;
+    userId: string | null;
+    secretId: string | null;
+    metadata: string | null;
+    previousHash: string | null;
+    createdAt: Date;
+  }): string {
+    const hashInput = JSON.stringify({
+      action: fields.action,
+      userId: fields.userId,
+      secretId: fields.secretId,
+      metadata: fields.metadata,
+      previousHash: fields.previousHash,
+      createdAt: new Date(fields.createdAt).toISOString(),
+    });
+    return crypto.createHash('sha256').update(hashInput).digest('hex');
+  }
+
   async log(data: {
     action: AuditAction;
     userId?: string;
@@ -28,34 +51,41 @@ export class AuditService {
     const lastLog = logs.length > 0 ? logs[0] : null;
     const previousHash = lastLog?.currentHash || null;
 
-    const hashInput = JSON.stringify({
-      action: data.action,
-      userId: data.userId,
-      secretId: data.secretId,
-      metadata: data.metadata,
-      previousHash,
-      timestamp: new Date().toISOString(),
-    });
+    const metadata = data.metadata ? JSON.stringify(data.metadata) : null;
 
-    const currentHash = crypto
-      .createHash('sha256')
-      .update(hashInput)
-      .digest('hex');
-
+    // 1. Prvo snimimo zapis da baza generiše createdAt.
     const auditLog = this.auditLogRepository.create({
       action: data.action,
       userId: data.userId || null,
       secretId: data.secretId || null,
-      metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+      metadata,
       previousHash,
-      currentHash,
+      currentHash: '', // privremeno
       ipAddress: data.ipAddress || null,
       userAgent: data.userAgent || null,
     });
+    const saved = await this.auditLogRepository.save(auditLog);
 
-    return await this.auditLogRepository.save(auditLog);
+    // 2. Izračunamo hash nad STVARNIM createdAt iz baze i upišemo ga.
+    saved.currentHash = this.computeHash({
+      action: saved.action,
+      userId: saved.userId,
+      secretId: saved.secretId,
+      metadata: saved.metadata,
+      previousHash: saved.previousHash,
+      createdAt: saved.createdAt,
+    });
+
+    return await this.auditLogRepository.save(saved);
   }
 
+  /**
+   * Provjera integriteta u DVA koraka:
+   *  (a) preračuna hash svakog zapisa iz njegovog sadržaja i uporedi sa sačuvanim
+   *      -> hvata IZMJENU sadržaja postojećeg zapisa.
+   *  (b) provjeri da previousHash svakog zapisa odgovara currentHash prethodnog
+   *      -> hvata BRISANJE ili UMETANJE zapisa.
+   */
   async verifyIntegrity(): Promise<{
     isValid: boolean;
     brokenAt?: string;
@@ -64,16 +94,29 @@ export class AuditService {
       order: { createdAt: 'ASC' },
     });
 
-    for (let i = 1; i < logs.length; i++) {
-      const currentLog = logs[i];
-      const previousLog = logs[i - 1];
+    let previousHash: string | null = null;
 
-      if (currentLog.previousHash !== previousLog.currentHash) {
-        return {
-          isValid: false,
-          brokenAt: currentLog.id,
-        };
+    for (const log of logs) {
+      // (a) sadržaj zapisa mora da odgovara svom hash-u
+      const recomputed = this.computeHash({
+        action: log.action,
+        userId: log.userId,
+        secretId: log.secretId,
+        metadata: log.metadata,
+        previousHash: log.previousHash,
+        createdAt: log.createdAt,
+      });
+
+      if (recomputed !== log.currentHash) {
+        return { isValid: false, brokenAt: log.id };
       }
+
+      // (b) veza sa prethodnim zapisom mora da bude očuvana
+      if (log.previousHash !== previousHash) {
+        return { isValid: false, brokenAt: log.id };
+      }
+
+      previousHash = log.currentHash;
     }
 
     return { isValid: true };

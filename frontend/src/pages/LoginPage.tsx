@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import "../styles/LoginPage.css";
 
+const GOOGLE_LOGIN_URL = "https://localhost:3000/auth/google";
+
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,10 +23,9 @@ const LoginPage: React.FC = () => {
 
     try {
       const result = await login(email, password);
-
       if (result.requireMfa) {
         setRequireMfa(true);
-      } else if (result.success && result.user) {
+      } else if (result.success) {
         navigate("/dashboard");
       }
     } catch (err: any) {
@@ -40,8 +41,13 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      // MFA verify logic (dodaćemo kasnije)
-      navigate("/dashboard");
+      // Drugi korak: šaljemo isti login zahtjev + MFA kod.
+      const result = await login(email, password, mfaToken);
+      if (result.success) {
+        navigate("/dashboard");
+      } else {
+        setError("MFA verification failed");
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || "MFA verification failed");
     } finally {
@@ -68,7 +74,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="form-group">
-            <label>Password:</label>
+            <label>Master Password:</label>
             <input
               type="password"
               value={password}
@@ -91,6 +97,7 @@ const LoginPage: React.FC = () => {
               onChange={(e) => setMfaToken(e.target.value)}
               required
               placeholder="Enter 6-digit code"
+              autoFocus
             />
           </div>
 
@@ -99,6 +106,12 @@ const LoginPage: React.FC = () => {
           </button>
         </form>
       )}
+
+      <div style={{ marginTop: "1rem", textAlign: "center" }}>
+        <a href={GOOGLE_LOGIN_URL} className="google-login-button">
+          Sign in with Google
+        </a>
+      </div>
 
       <div className="auth-link">
         Don't have an account? <Link to="/register">Register</Link>

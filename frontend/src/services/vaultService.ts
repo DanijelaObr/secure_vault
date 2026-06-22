@@ -44,7 +44,9 @@ export const vaultService = {
   },
 
   async revokeShare(secretId: string, email: string): Promise<void> {
-    await api.delete(`/vault/secrets/${secretId}/share/${email}`);
+    await api.delete(
+      `/vault/secrets/${secretId}/share/${encodeURIComponent(email)}`,
+    );
   },
 
   // Admin only

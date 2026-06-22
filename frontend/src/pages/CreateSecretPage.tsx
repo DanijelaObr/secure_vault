@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { vaultService } from "../services/vaultService";
+import { useAuth } from "../contexts/AuthContext";
+import { encryptSecret } from "../services/cryptoService";
 import "../styles/CreateSecretPage.css";
 
 const CreateSecretPage: React.FC = () => {
@@ -17,18 +19,25 @@ const CreateSecretPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const { publicKey, vaultUnlocked } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
+    if (!vaultUnlocked || !publicKey) {
+      setError("Vault je zaključan. Prijavi se ponovo master lozinkom.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      // Za sada, encryptedData je plain text (dodaćemo RSA encryption kasnije)
-      const encryptedData = JSON.stringify({
-        password,
-        notes,
-      });
+      // ENKRIPCIJA NA KLIJENTU: sadržaj se enkriptuje prije slanja.
+      const plaintext = JSON.stringify({ password, notes });
+      const { encryptedData, encryptedKey } = await encryptSecret(
+        plaintext,
+        publicKey,
+      );
 
       await vaultService.createSecret({
         title,
@@ -36,6 +45,8 @@ const CreateSecretPage: React.FC = () => {
         url: url || undefined,
         username: username || undefined,
         encryptedData,
+        encryptedKey,
+        isFavorite,
       });
 
       navigate("/dashboard");
@@ -141,7 +152,7 @@ const CreateSecretPage: React.FC = () => {
             Cancel
           </button>
           <button type="submit" disabled={loading} className="btn-submit">
-            {loading ? "Creating..." : "Create Secret"}
+            {loading ? "Encrypting..." : "Create Secret"}
           </button>
         </div>
       </form>

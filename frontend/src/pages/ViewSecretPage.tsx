@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { vaultService } from "../services/vaultService";
+import { authService } from "../services/authService";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  decryptSecret,
+  reEncryptKeyForRecipient,
+} from "../services/cryptoService";
 import type { Secret } from "../types";
 import "../styles/ViewSecretPage.css";
 
 const ViewSecretPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { privateKey, vaultUnlocked } = useAuth();
 
   const [secret, setSecret] = useState<Secret | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -14,21 +21,38 @@ const ViewSecretPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // share UI
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareMsg, setShareMsg] = useState("");
+  const [sharing, setSharing] = useState(false);
+
   useEffect(() => {
     loadSecret();
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, privateKey]);
 
   const loadSecret = async () => {
     if (!id) return;
-
     try {
       const data = await vaultService.getSecretById(id);
       setSecret(data);
 
-      // Dešifruj podatke (za sada samo parse JSON-a)
-      // TODO: Dodati RSA dešifrovanje
-      const parsed = JSON.parse(data.encryptedData);
-      setDecryptedData(parsed);
+      if (!vaultUnlocked || !privateKey) {
+        setError("Vault je zaključan. Prijavi se ponovo master lozinkom.");
+        return;
+      }
+      if (!data.encryptedKey) {
+        setError("Nedostaje ključ za dešifrovanje ove tajne.");
+        return;
+      }
+
+      // DEŠIFROVANJE NA KLIJENTU
+      const plaintext = await decryptSecret(
+        data.encryptedData,
+        data.encryptedKey,
+        privateKey,
+      );
+      setDecryptedData(JSON.parse(plaintext));
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load secret");
     } finally {
@@ -36,10 +60,42 @@ const ViewSecretPage: React.FC = () => {
     }
   };
 
+  const handleShare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setShareMsg("");
+    if (!id || !secret?.encryptedKey || !privateKey) {
+      setShareMsg("Vault zaključan ili ključ nedostupan.");
+      return;
+    }
+    setSharing(true);
+    try {
+      // Dohvati javni ključ primaoca, pa re-enkriptuj AES ključ NA KLIJENTU.
+      const { publicKey: recipientPub } =
+        await authService.getPublicKey(shareEmail);
+      const encryptedKeyForRecipient = await reEncryptKeyForRecipient(
+        secret.encryptedKey,
+        privateKey,
+        recipientPub,
+      );
+
+      await vaultService.shareSecret(id, {
+        sharedWithEmail: shareEmail,
+        encryptedKey: encryptedKeyForRecipient,
+        permission: "read",
+      });
+
+      setShareMsg(`Podijeljeno sa ${shareEmail}`);
+      setShareEmail("");
+    } catch (err: any) {
+      setShareMsg(err.response?.data?.message || "Dijeljenje nije uspjelo");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     if (!window.confirm("Are you sure you want to delete this secret?")) return;
-
     try {
       await vaultService.deleteSecret(id);
       navigate("/dashboard");
@@ -49,7 +105,6 @@ const ViewSecretPage: React.FC = () => {
   };
 
   if (loading) return <div className="loading">Loading...</div>;
-  if (error) return <div className="error-message">{error}</div>;
   if (!secret) return <div className="error-message">Secret not found</div>;
 
   return (
@@ -57,86 +112,79 @@ const ViewSecretPage: React.FC = () => {
       <div className="view-secret-container">
         <h1>{secret.title}</h1>
 
+        {error && <div className="error-message">{error}</div>}
+
         <div className="secret-field">
-          <label>Type</label>
-          <div className="secret-field-value">{secret.type}</div>
+          <strong>Type:</strong> {secret.type}
         </div>
 
         {secret.url && (
           <div className="secret-field">
-            <label>URL</label>
-            <div className="secret-field-value">
-              <a href={secret.url} target="_blank" rel="noopener noreferrer">
-                {secret.url}
-              </a>
-            </div>
+            <strong>URL:</strong> {secret.url}
           </div>
         )}
 
         {secret.username && (
           <div className="secret-field">
-            <label>Username</label>
-            <div className="secret-field-value">{secret.username}</div>
+            <strong>Username:</strong> {secret.username}
           </div>
         )}
 
-        {decryptedData?.password && (
-          <div className="secret-field">
-            <label>Password</label>
-            <div className="password-field">
-              <div className="secret-field-value">
-                {showPassword ? (
-                  decryptedData.password
-                ) : (
-                  <span className="password-hidden">••••••••••••</span>
-                )}
+        {decryptedData && (
+          <>
+            {decryptedData.password !== undefined && (
+              <div className="secret-field">
+                <strong>Password:</strong>{" "}
+                {showPassword ? decryptedData.password : "••••••••"}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="btn-small"
+                  style={{ marginLeft: "0.5rem" }}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
               </div>
-              <button
-                onClick={() => setShowPassword(!showPassword)}
-                className="btn-toggle-password"
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-          </div>
+            )}
+            {decryptedData.notes && (
+              <div className="secret-field">
+                <strong>Notes:</strong> {decryptedData.notes}
+              </div>
+            )}
+          </>
         )}
 
-        {decryptedData?.notes && (
-          <div className="secret-field">
-            <label>Notes</label>
-            <div className="secret-field-value">{decryptedData.notes}</div>
-          </div>
-        )}
-
-        <div className="secret-field">
-          <label>Created</label>
-          <div className="secret-field-value">
-            {new Date(secret.createdAt).toLocaleString()}
-          </div>
-        </div>
-
-        {secret.lastAccessedAt && (
-          <div className="secret-field">
-            <label>Last Accessed</label>
-            <div className="secret-field-value">
-              {new Date(secret.lastAccessedAt).toLocaleString()}
-            </div>
-          </div>
-        )}
-
-        <div className="action-buttons">
-          <button onClick={() => navigate("/dashboard")} className="btn-back">
-            Back to Dashboard
+        <div className="form-actions" style={{ marginTop: "1rem" }}>
+          <button onClick={() => navigate("/dashboard")} className="btn-cancel">
+            Back
           </button>
           <button
             onClick={() => navigate(`/vault/edit/${id}`)}
-            className="btn-edit"
+            className="btn-small btn-edit"
           >
             Edit
           </button>
-          <button onClick={handleDelete} className="btn-delete">
+          <button onClick={handleDelete} className="btn-small btn-delete">
             Delete
           </button>
+        </div>
+
+        {/* Dijeljenje tajne */}
+        <div className="share-section" style={{ marginTop: "2rem" }}>
+          <h3>Share secret</h3>
+          <form onSubmit={handleShare}>
+            <input
+              type="email"
+              value={shareEmail}
+              onChange={(e) => setShareEmail(e.target.value)}
+              placeholder="recipient@example.com"
+              required
+            />
+            <button type="submit" disabled={sharing} className="btn-submit">
+              {sharing ? "Sharing..." : "Share"}
+            </button>
+          </form>
+          {shareMsg && <p>{shareMsg}</p>}
         </div>
       </div>
     </div>

@@ -5,6 +5,11 @@ export class ShareSecretDto {
   @IsString()
   sharedWithEmail!: string;
 
+  // AES ključ tajne RE-ENKRIPTOVAN javnim ključem primaoca (na klijentu).
+  // Server ovaj blob samo skladišti — ne radi kripto.
+  @IsString()
+  encryptedKey!: string;
+
   @IsOptional()
   @IsEnum(SharedSecretPermission)
   permission?: SharedSecretPermission;

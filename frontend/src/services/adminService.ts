@@ -19,13 +19,34 @@ export const adminService = {
     return response.data;
   },
 
-  async verifyAuditLog(logId: string): Promise<{ valid: boolean }> {
-    const response = await api.get(`/vault/audit/verify?logId=${logId}`);
+  /** Provjera integriteta hash-lanca audit logova. */
+  async verifyAuditIntegrity(): Promise<{
+    isValid: boolean;
+    brokenAt?: string;
+  }> {
+    const response = await api.get("/vault/audit/verify");
     return response.data;
   },
 
   async getMyActivity(): Promise<AuditLog[]> {
     const response = await api.get("/vault/audit/my-activity");
+    return response.data;
+  },
+
+  /** Kreiranje honeypot tajne (nevidljiva regularnim korisnicima). */
+  async createHoneypot(payload: {
+    title: string;
+    encryptedData: string;
+    encryptedKey: string;
+    type: string;
+  }): Promise<any> {
+    const response = await api.post("/vault/honeypot", payload);
+    return response.data;
+  },
+
+  /** Test SQL injection endpointa (radi samo ako je uključen u policy). */
+  async testSqlInjection(email: string): Promise<any> {
+    const response = await api.post("/vault/test/sql-injection", { email });
     return response.data;
   },
 };

@@ -5,9 +5,14 @@ import { VaultController } from './vault.controller';
 import { Secret } from '../database/entities/secret.entity';
 import { SharedSecret } from '../database/entities/shared-secret.entity';
 import { SharedModule } from 'src/shared/shared.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Secret, SharedSecret]), SharedModule],
+  imports: [
+    TypeOrmModule.forFeature([Secret, SharedSecret]),
+    SharedModule,
+    AdminModule,
+  ],
   controllers: [VaultController],
   providers: [VaultService],
 })

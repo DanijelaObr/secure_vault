@@ -26,7 +26,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
-  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 registracije na sat
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -43,14 +43,12 @@ export class AuthController {
 
     const result = await this.authService.login(loginDto, ipAddress, userAgent);
 
-    // Get policy for cookie durations
     const policy = await this.adminService.getSecurityPolicy();
 
-    // Set HttpOnly cookies
     if (result.access_token) {
       res.cookie('accessToken', result.access_token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'strict',
         maxAge: policy.accessTokenDuration * 60 * 1000,
       });
@@ -59,23 +57,22 @@ export class AuthController {
     if (result.refresh_token) {
       res.cookie('refreshToken', result.refresh_token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
         sameSite: 'strict',
         maxAge: policy.refreshTokenDuration * 60 * 1000,
       });
     }
 
+    // access_token se NE vraća u body-ju — autentikacija ide preko HttpOnly cookie-ja.
     return {
-      access_token: result.access_token,
       user: result.user,
       requiresMfa: result.requiresMfa,
     };
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard) // ← JWT Guard zaštita!
+  @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
-    // req.user je User objekat koji JWT Strategy vratila!
     return {
       message: 'This is your profile',
       user: {
@@ -86,8 +83,39 @@ export class AuthController {
         mfaEnabled: req.user.mfaEnabled,
         createdAt: req.user.createdAt,
         lastLoginAt: req.user.lastLoginAt,
+        vaultInitialized: !!req.user.salt,
       },
     };
+  }
+
+  /** Kripto materijal trenutnog korisnika (za otključavanje vault-a na klijentu). */
+  @Get('crypto-material')
+  @UseGuards(JwtAuthGuard)
+  async getCryptoMaterial(@Request() req) {
+    return this.authService.getCryptoMaterial(req.user.id);
+  }
+
+  /** Javni ključ drugog korisnika (za dijeljenje tajni). */
+  @Get('public-key/:email')
+  @UseGuards(JwtAuthGuard)
+  async getPublicKey(@Request() req) {
+    return this.authService.getPublicKeyByEmail(req.params.email);
+  }
+
+  /** Inicijalizacija vault ključeva (npr. Google korisnik koji nema master password). */
+  @Post('setup-vault')
+  @UseGuards(JwtAuthGuard)
+  async setupVault(
+    @Request() req,
+    @Body()
+    body: { publicKey: string; encryptedPrivateKey: string; salt: string },
+  ) {
+    return this.authService.setupVaultKeys(
+      req.user.id,
+      body.publicKey,
+      body.encryptedPrivateKey,
+      body.salt,
+    );
   }
 
   @Post('mfa/enable')
@@ -110,14 +138,28 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  async googleAuth(@Request() req) {
+  async googleAuth() {
     // Redirects to Google
   }
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  async googleAuthRedirect(@Request() req) {
-    return this.authService.googleLogin(req.user);
+  async googleAuthRedirect(
+    @Request() req,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.googleLogin(req.user);
+    const policy = await this.adminService.getSecurityPolicy();
+
+    res.cookie('accessToken', result.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: policy.accessTokenDuration * 60 * 1000,
+    });
+
+    // Redirect nazad na frontend
+    res.redirect('https://localhost:5173/dashboard');
   }
 
   @Post('refresh')
@@ -140,14 +182,14 @@ export class AuthController {
 
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'strict',
       maxAge: policy.accessTokenDuration * 60 * 1000,
     });
 
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'strict',
       maxAge: policy.refreshTokenDuration * 60 * 1000,
     });
@@ -159,10 +201,8 @@ export class AuthController {
   async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
     const refreshToken = req.cookies?.refreshToken;
     await this.authService.logout(refreshToken);
-
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
-
     return { message: 'Logged out successfully' };
   }
 }

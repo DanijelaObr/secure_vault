@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import {
   SuspiciousActivity,
   ActivityType,
@@ -76,7 +76,7 @@ export class SecurityService {
       const recentActivities = await this.suspiciousActivityRepository.count({
         where: {
           ipAddress,
-          createdAt: LessThan(oneHourAgo),
+          createdAt: MoreThan(oneHourAgo),
         },
       });
 

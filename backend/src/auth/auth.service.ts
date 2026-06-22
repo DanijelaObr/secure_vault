@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,7 +12,6 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { MfaService } from './mfa.service';
-import { CryptoService } from '../shared/services/crypto.service';
 import { AuditService } from '../shared/services/audit.service';
 import { AuditAction } from '../shared/enums';
 import { UserRole } from '../shared/enums';
@@ -30,7 +30,6 @@ export class AuthService {
     private refreshTokenRepository: Repository<RefreshToken>,
     private jwtService: JwtService,
     private mfaService: MfaService,
-    private cryptoService: CryptoService,
     private auditService: AuditService,
     private adminService: AdminService,
     private securityService: SecurityService,
@@ -39,9 +38,16 @@ export class AuthService {
   async register(
     registerDto: RegisterDto,
   ): Promise<{ message: string; userId: string }> {
-    const { email, username, password, role } = registerDto;
+    const {
+      email,
+      username,
+      password,
+      role,
+      publicKey,
+      encryptedPrivateKey,
+      salt,
+    } = registerDto;
 
-    // Provjeri da li korisnik već postoji
     const existingUser = await this.userRepository.findOne({
       where: { email },
     });
@@ -49,7 +55,7 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    // VALIDACIJA PASSWORD-a prema security policy
+    // Validacija master passworda prema security policy
     const passwordValidation =
       await this.adminService.validatePassword(password);
     if (!passwordValidation.valid) {
@@ -58,19 +64,11 @@ export class AuthService {
       );
     }
 
-    // Hash lozinke
+    // Hash lozinke (samo za autentikaciju — NE za kripto)
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Generiši RSA key pair
-    const { publicKey, privateKey } = this.cryptoService.generateKeyPair();
-
-    // Enkriptuj private key sa master password-om korisnika
-    const encryptedPrivateKey = this.cryptoService.encryptPrivateKey(
-      privateKey,
-      password,
-    );
-
-    // Kreiraj korisnika
+    // ZERO-KNOWLEDGE: ključeve je već generisao KLIJENT.
+    // Server samo skladišti publicKey + (već enkriptovan) encryptedPrivateKey + salt.
     const user = this.userRepository.create({
       email,
       username,
@@ -78,6 +76,7 @@ export class AuthService {
       role,
       publicKey,
       encryptedPrivateKey,
+      salt,
       mfaEnabled: false,
     });
 
@@ -89,10 +88,7 @@ export class AuthService {
       metadata: { email: savedUser.email, role: savedUser.role },
     });
 
-    return {
-      message: 'User registered successfully',
-      userId: savedUser.id,
-    };
+    return { message: 'User registered successfully', userId: savedUser.id };
   }
 
   async login(
@@ -107,23 +103,18 @@ export class AuthService {
   }> {
     const { email, password, mfaCode } = loginDto;
 
-    // Pronađi korisnika
     const user = await this.userRepository.findOne({ where: { email } });
-
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Provjeri frozen status
     if (user.isFrozen) {
       throw new UnauthorizedException(
         'Account is frozen. Contact administrator.',
       );
     }
 
-    // Provjeri lozinku
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-
     if (!isPasswordValid) {
       await this.securityService.logSuspiciousActivity(
         ipAddress || 'unknown',
@@ -137,17 +128,15 @@ export class AuthService {
 
     // ===== MFA PROVJERA =====
     if (user.mfaEnabled) {
-      // Ako MFA je enabled, MORA poslati mfaCode
       if (!mfaCode) {
         return {
           access_token: '',
           refresh_token: '',
           user: { id: user.id, email: user.email },
-          requiresMfa: true, // Signal frontend-u da traži MFA kod
+          requiresMfa: true,
         };
       }
 
-      // Validiraj MFA kod
       const isValidMfa = this.mfaService.verifyToken(mfaCode, user.mfaSecret!);
       if (!isValidMfa) {
         await this.securityService.logSuspiciousActivity(
@@ -157,23 +146,15 @@ export class AuthService {
           userAgent,
           'Invalid MFA code',
         );
-
         throw new UnauthorizedException('Invalid MFA code');
       }
     }
 
-    // Update last login
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
-    // Generiši JWT token
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    const payload = { sub: user.id, email: user.email, role: user.role };
 
-    // Čitaj trajanje iz security policy
     const policy = await this.adminService.getSecurityPolicy();
     const access_token = this.jwtService.sign(payload, {
       expiresIn: `${policy.accessTokenDuration}m`,
@@ -185,13 +166,14 @@ export class AuthService {
       userAgent,
     );
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.USER_LOGIN,
       userId: user.id,
       metadata: { email: user.email },
     });
 
+    // Vraćamo i kripto materijal da klijent može izvesti master ključ
+    // i otključati svoj privatni ključ U BROWSERU.
     return {
       access_token,
       refresh_token,
@@ -200,38 +182,58 @@ export class AuthService {
         email: user.email,
         username: user.username,
         role: user.role,
+        salt: user.salt,
+        encryptedPrivateKey: user.encryptedPrivateKey,
+        publicKey: user.publicKey,
       },
     };
   }
 
   /**
-   * Aktiviraj MFA za korisnika
+   * Vraća kripto materijal trenutnog korisnika (za otključavanje vault-a na klijentu).
    */
+  async getCryptoMaterial(userId: string): Promise<{
+    salt: string | null;
+    encryptedPrivateKey: string;
+    publicKey: string;
+  }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      salt: user.salt,
+      encryptedPrivateKey: user.encryptedPrivateKey,
+      publicKey: user.publicKey,
+    };
+  }
+
+  /**
+   * Vraća javni ključ korisnika po emailu (za dijeljenje tajni).
+   */
+  async getPublicKeyByEmail(
+    email: string,
+  ): Promise<{ email: string; publicKey: string }> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException(`User with email ${email} not found`);
+    }
+    return { email: user.email, publicKey: user.publicKey };
+  }
+
   async enableMfa(userId: string): Promise<{ qrCode: string; secret: string }> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-
-    // Generiši MFA secret
     const secret = this.mfaService.generateSecret();
-
-    // Generiši QR kod URL
     const otpAuthUrl = this.mfaService.generateQrCodeUrl(user.email, secret);
-
-    // Generiši QR kod sliku
     const qrCode = await this.mfaService.generateQrCode(otpAuthUrl);
-
-    // Sačuvaj secret (ali još ne aktiviraj MFA - čekamo potvrdu)
     user.mfaSecret = secret;
     await this.userRepository.save(user);
-
     return { qrCode, secret };
   }
 
-  /**
-   * Verifikuj i finalizuj MFA aktivaciju
-   */
   async verifyAndEnableMfa(
     userId: string,
     token: string,
@@ -240,29 +242,16 @@ export class AuthService {
     if (!user || !user.mfaSecret) {
       throw new UnauthorizedException('MFA setup not initiated');
     }
-
-    // Provjeri da li je kod validan
     const isValid = this.mfaService.verifyToken(token, user.mfaSecret);
     if (!isValid) {
       throw new UnauthorizedException('Invalid MFA code');
     }
-
-    // Aktiviraj MFA
     user.mfaEnabled = true;
     await this.userRepository.save(user);
-
-    // AUDIT LOG
-    await this.auditService.log({
-      action: AuditAction.MFA_ENABLED,
-      userId,
-    });
-
+    await this.auditService.log({ action: AuditAction.MFA_ENABLED, userId });
     return { message: 'MFA enabled successfully' };
   }
 
-  /**
-   * Disable MFA
-   */
   async disableMfa(
     userId: string,
     token: string,
@@ -271,49 +260,42 @@ export class AuthService {
     if (!user || !user.mfaEnabled) {
       throw new UnauthorizedException('MFA is not enabled');
     }
-
-    // Provjeri da li je kod validan prije nego onemogućimo MFA
     const isValid = this.mfaService.verifyToken(token, user.mfaSecret!);
     if (!isValid) {
       throw new UnauthorizedException('Invalid MFA code');
     }
-
-    // Disable MFA
     user.mfaEnabled = false;
     user.mfaSecret = null;
     await this.userRepository.save(user);
-
-    // AUDIT LOG
-    await this.auditService.log({
-      action: AuditAction.MFA_DISABLED,
-      userId,
-    });
-
+    await this.auditService.log({ action: AuditAction.MFA_DISABLED, userId });
     return { message: 'MFA disabled successfully' };
   }
 
+  /**
+   * Google OIDC login. NAPOMENA: Google korisnik nema master password,
+   * pa pri prvom ulasku NEMA kripto ključeve. Vault se otključava tek
+   * kada korisnik na klijentu postavi zaseban master password
+   * (poziv ka setupVaultKeys ispod). Do tada može da koristi sve OSIM
+   * čitanja/kreiranja enkriptovanih tajni.
+   */
   async googleLogin(googleUser: any) {
     let user = await this.userRepository.findOne({
       where: { email: googleUser.email },
     });
 
     if (!user) {
-      // Kreiraj novog korisnika ako ne postoji
-      const { publicKey, privateKey } = this.cryptoService.generateKeyPair();
-
       user = this.userRepository.create({
         email: googleUser.email,
         username: googleUser.email.split('@')[0],
-        passwordHash: '', // Google OAuth - nema lozinke
+        passwordHash: '',
         role: UserRole.DEVELOPER,
-        publicKey,
-        encryptedPrivateKey: '', // Google OAuth - nema master password-a
+        publicKey: '', // postavlja se kasnije, kada korisnik definiše vault master password
+        encryptedPrivateKey: '',
+        salt: null,
         mfaEnabled: false,
       });
-
       user = await this.userRepository.save(user);
 
-      // AUDIT LOG
       await this.auditService.log({
         action: AuditAction.USER_REGISTER,
         userId: user.id,
@@ -321,15 +303,12 @@ export class AuthService {
       });
     }
 
-    // Update lastLoginAt
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
 
-    // Generate JWT
     const payload = { email: user.email, sub: user.id, role: user.role };
     const access_token = this.jwtService.sign(payload);
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.USER_LOGIN,
       userId: user.id,
@@ -343,8 +322,36 @@ export class AuthService {
         email: user.email,
         username: user.username,
         role: user.role,
+        salt: user.salt,
+        encryptedPrivateKey: user.encryptedPrivateKey,
+        publicKey: user.publicKey,
+        vaultInitialized: !!user.salt,
       },
     };
+  }
+
+  /**
+   * Postavlja kripto ključeve za nalog koji ih nema (npr. Google korisnik).
+   * Klijent generiše ključeve iz odabranog vault master passworda i šalje ih.
+   */
+  async setupVaultKeys(
+    userId: string,
+    publicKey: string,
+    encryptedPrivateKey: string,
+    salt: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.salt) {
+      throw new ConflictException('Vault keys already initialized');
+    }
+    user.publicKey = publicKey;
+    user.encryptedPrivateKey = encryptedPrivateKey;
+    user.salt = salt;
+    await this.userRepository.save(user);
+    return { message: 'Vault keys initialized' };
   }
 
   async generateRefreshToken(
@@ -353,7 +360,6 @@ export class AuthService {
     userAgent?: string,
   ): Promise<string> {
     const token = crypto.randomBytes(64).toString('hex');
-
     const policy = await this.adminService.getSecurityPolicy();
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + policy.refreshTokenDuration);
@@ -366,7 +372,6 @@ export class AuthService {
       userAgent,
       revoked: false,
     });
-
     return token;
   }
 
@@ -383,16 +388,13 @@ export class AuthService {
     if (!tokenRecord) {
       throw new UnauthorizedException('Invalid refresh token');
     }
-
     if (new Date() > tokenRecord.expiresAt) {
       throw new UnauthorizedException('Refresh token expired');
     }
 
-    // Revoke old token
     tokenRecord.revoked = true;
     await this.refreshTokenRepository.save(tokenRecord);
 
-    // Generate new tokens
     const payload = {
       sub: tokenRecord.user.id,
       email: tokenRecord.user.email,
@@ -409,10 +411,7 @@ export class AuthService {
       userAgent,
     );
 
-    return {
-      accessToken,
-      refreshToken: newRefreshToken,
-    };
+    return { accessToken, refreshToken: newRefreshToken };
   }
 
   async logout(refreshToken: string) {
