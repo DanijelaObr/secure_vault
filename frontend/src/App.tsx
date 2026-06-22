@@ -7,6 +7,9 @@ import DashboardPage from "./pages/DashboardPage";
 import CreateSecretPage from "./pages/CreateSecretPage";
 import ViewSecretPage from "./pages/ViewSecretPage";
 import EditSecretPage from "./pages/EditSecretPage";
+import AdminPage from "./pages/AdminPage";
+import MfaSetupPage from "./pages/MfaSetupPage";
+import VaultLockBanner from "./components/VaultLockBanner";
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -22,7 +25,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <VaultLockBanner />
+      {children}
+    </>
+  );
 };
 
 function App() {
@@ -38,6 +46,24 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mfa"
+            element={
+              <ProtectedRoute>
+                <MfaSetupPage />
               </ProtectedRoute>
             }
           />

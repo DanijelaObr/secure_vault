@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { SecurityPolicy } from './entities/security-policy.entity';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from '../shared/enums/user-role.enum';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -9,19 +10,32 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 async function seed() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
+  const policyRepository = app.get<Repository<SecurityPolicy>>(
+    getRepositoryToken(SecurityPolicy),
+  );
 
-  // Provjeri da li admin već postoji
+  // ===== SECURITY POLICY (mora postojati prije registracije/logina) =====
+  const existingPolicy = await policyRepository.findOne({ where: {} });
+  if (!existingPolicy) {
+    // Sve vrijednosti su default iz entiteta; čuvamo prazan red da se popune.
+    const policy = policyRepository.create({});
+    await policyRepository.save(policy);
+    console.log('Default security policy created.');
+  } else {
+    console.log('Security policy already exists.');
+  }
+
+  // ===== ADMIN NALOG =====
   const existingAdmin = await userRepository.findOne({
     where: { email: 'admin@securevault.com' },
   });
 
   if (existingAdmin) {
-    console.log('Admin already exists. Skipping seed.');
+    console.log('Admin already exists. Skipping admin seed.');
     await app.close();
     return;
   }
 
-  // Kreiraj admin nalog
   const passwordHash = await bcrypt.hash('Admin123!', 10);
 
   const admin = userRepository.create({
@@ -29,8 +43,12 @@ async function seed() {
     username: 'admin',
     passwordHash,
     role: UserRole.ADMIN,
-    publicKey: 'dummy-public-key', // Seed nalog bez RSA enkripcije
-    encryptedPrivateKey: 'dummy-private-key',
+    // ZERO-KNOWLEDGE: server ne generiše ključeve. Admin pri prvom loginu
+    // postavlja vault master password na klijentu (poziv /auth/setup-vault),
+    // čime se generišu i čuvaju publicKey/encryptedPrivateKey/salt.
+    publicKey: '',
+    encryptedPrivateKey: '',
+    salt: null,
     isActive: true,
   });
 

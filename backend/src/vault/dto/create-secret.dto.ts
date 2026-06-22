@@ -5,8 +5,13 @@ export class CreateSecretDto {
   @IsString()
   title!: string;
 
+  // AES-GCM šifrovan sadržaj (enkriptovan na klijentu)
   @IsString()
-  encryptedData!: string; // Frontend će enkriptovati prije slanja!
+  encryptedData!: string;
+
+  // AES ključ šifrovan RSA javnim ključem vlasnika (enkriptovan na klijentu)
+  @IsString()
+  encryptedKey!: string;
 
   @IsEnum(SecretType)
   type!: SecretType;
@@ -18,10 +23,6 @@ export class CreateSecretDto {
   @IsOptional()
   @IsString()
   username?: string;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
 
   @IsOptional()
   @IsBoolean()

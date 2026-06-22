@@ -1,0 +1,93 @@
+.admin-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.admin-section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-section h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.policy-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hint {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-top: 0;
+}
+
+.sql-result {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
+
+.integrity {
+  font-weight: 600;
+  margin: 0.75rem 0;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.audit-table th,
+.audit-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.hash-cell {
+  font-family: monospace;
+  color: #475569;
+}
+
+.success-message {
+  background: #dcfce7;
+  color: #166534;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}

@@ -54,6 +54,10 @@ export class SecurityPolicy {
   @Column({ default: false })
   requireMfaForAdmins!: boolean;
 
+  // Honeypot/SQLi test: admin privremeno "uključuje" ranjivi endpoint
+  @Column({ default: false })
+  sqlInjectionTestEnabled!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 

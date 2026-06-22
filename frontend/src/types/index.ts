@@ -2,56 +2,75 @@ export interface User {
   id: string;
   email: string;
   username: string;
-  role: 'user' | 'admin';
-  mfaEnabled: boolean;
-  isFrozen: boolean;
-  createdAt: string;
+  role: "admin" | "team_lead" | "developer";
+  mfaEnabled?: boolean;
+  isFrozen?: boolean;
+  createdAt?: string;
+  // ZK kripto materijal (vraća se pri loginu)
+  salt?: string | null;
+  encryptedPrivateKey?: string;
+  publicKey?: string;
+  vaultInitialized?: boolean;
 }
 
 export interface Secret {
   id: string;
   title: string;
-  type: 'password' | 'note' | 'card' | 'identity';
+  type: "password" | "note" | "card" | "identity";
   url?: string;
   username?: string;
-  encryptedData: string;
-  notes?: string;
+  encryptedData: string; // AES-GCM blob (JSON { iv, data })
+  encryptedKey?: string; // RSA-šifrovan AES ključ (za vlasnika ili za mene kod deljenja)
   isFavorite: boolean;
   isHoneypot?: boolean;
   createdAt: string;
   updatedAt: string;
   lastAccessedAt?: string;
+  owner?: { email: string; username: string };
+  permission?: "read" | "write";
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+  mfaCode?: string;
 }
 
 export interface RegisterRequest {
   email: string;
   username: string;
   password: string;
+  role: "admin" | "team_lead" | "developer";
+  publicKey: string;
+  encryptedPrivateKey: string;
+  salt: string;
 }
 
 export interface AuthResponse {
-  accessToken: string;
   user: User;
-  requireMfa?: boolean;
+  requiresMfa?: boolean;
 }
 
 export interface CreateSecretRequest {
   title: string;
-  type: 'password' | 'note' | 'card' | 'identity';
+  type: "password" | "note" | "card" | "identity";
   url?: string;
   username?: string;
   encryptedData: string;
-  notes?: string;
+  encryptedKey: string;
+  isFavorite?: boolean;
 }
 
 export interface ShareSecretRequest {
   sharedWithEmail: string;
-  permission: 'read' | 'write';
+  encryptedKey: string;
+  permission?: "read" | "write";
+}
+
+export interface CryptoMaterial {
+  salt: string | null;
+  encryptedPrivateKey: string;
+  publicKey: string;
 }
 
 export interface AuditLog {
@@ -80,4 +99,5 @@ export interface SecurityPolicy {
   maxLoginAttempts: number;
   accountLockoutDuration: number;
   requireMfaForAdmins: boolean;
+  sqlInjectionTestEnabled: boolean;
 }

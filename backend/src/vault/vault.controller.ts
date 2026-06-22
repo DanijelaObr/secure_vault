@@ -18,6 +18,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ShareSecretDto } from './dto/share-secret.dto';
 import { AuditService } from '../shared/services/audit.service';
+import { AdminService } from '../admin/admin.service';
+import { ForbiddenException } from '@nestjs/common';
 
 @Controller('vault')
 @UseGuards(JwtAuthGuard) // SVE rute zaštićene JWT-om!
@@ -25,6 +27,7 @@ export class VaultController {
   constructor(
     private readonly vaultService: VaultService,
     private readonly auditService: AuditService,
+    private readonly adminService: AdminService,
   ) {}
 
   @Post('secrets')
@@ -165,8 +168,13 @@ export class VaultController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async testSqlInjection(@Request() req, @Body() body: { email: string }) {
-    // NAMJERNO RANJIV ENDPOINT ZA TESTIRANJE!
-    // NE KORISTITI U PRODUKCIJI!
+    // NAMJERNO RANJIV ENDPOINT — radi SAMO kada ga admin privremeno uključi.
+    const policy = await this.adminService.getSecurityPolicy();
+    if (!policy.sqlInjectionTestEnabled) {
+      throw new ForbiddenException(
+        'SQL injection test endpoint is disabled. Enable it in security policy first.',
+      );
+    }
     return this.vaultService.testSqlInjection(body.email);
   }
 }

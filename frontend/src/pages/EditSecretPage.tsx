@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { vaultService } from "../services/vaultService";
-import type { Secret } from "../types";
+import { useAuth } from "../contexts/AuthContext";
+import { decryptSecret, encryptSecret } from "../services/cryptoService";
 import "../styles/CreateSecretPage.css";
 
 const EditSecretPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { privateKey, publicKey, vaultUnlocked } = useAuth();
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"password" | "note" | "card" | "identity">(
@@ -23,11 +25,11 @@ const EditSecretPage: React.FC = () => {
 
   useEffect(() => {
     loadSecret();
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, privateKey]);
 
   const loadSecret = async () => {
     if (!id) return;
-
     try {
       const secret = await vaultService.getSecretById(id);
 
@@ -35,12 +37,25 @@ const EditSecretPage: React.FC = () => {
       setType(secret.type);
       setUrl(secret.url || "");
       setUsername(secret.username || "");
+      setIsFavorite(secret.isFavorite || false);
 
-      // Dešifruj podatke (za sada samo parse)
-      const decrypted = JSON.parse(secret.encryptedData);
+      if (!vaultUnlocked || !privateKey) {
+        setError("Vault je zaključan. Prijavi se ponovo master lozinkom.");
+        return;
+      }
+      if (!secret.encryptedKey) {
+        setError("Nedostaje ključ za dešifrovanje ove tajne.");
+        return;
+      }
+
+      const plaintext = await decryptSecret(
+        secret.encryptedData,
+        secret.encryptedKey,
+        privateKey,
+      );
+      const decrypted = JSON.parse(plaintext);
       setPassword(decrypted.password || "");
       setNotes(decrypted.notes || "");
-      setIsFavorite(secret.isFavorite || false);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load secret");
     } finally {
@@ -51,15 +66,21 @@ const EditSecretPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSaving(true);
-
     if (!id) return;
 
+    if (!vaultUnlocked || !publicKey) {
+      setError("Vault je zaključan. Prijavi se ponovo master lozinkom.");
+      return;
+    }
+
+    setSaving(true);
     try {
-      const encryptedData = JSON.stringify({
-        password,
-        notes,
-      });
+      // Re-enkripcija na klijentu (novi AES ključ + novi encryptedKey).
+      const plaintext = JSON.stringify({ password, notes });
+      const { encryptedData, encryptedKey } = await encryptSecret(
+        plaintext,
+        publicKey,
+      );
 
       await vaultService.updateSecret(id, {
         title,
@@ -67,6 +88,8 @@ const EditSecretPage: React.FC = () => {
         url: url || undefined,
         username: username || undefined,
         encryptedData,
+        encryptedKey,
+        isFavorite,
       });
 
       navigate(`/vault/view/${id}`);
@@ -78,7 +101,6 @@ const EditSecretPage: React.FC = () => {
   };
 
   if (loading) return <div className="loading">Loading...</div>;
-  if (error && !title) return <div className="error-message">{error}</div>;
 
   return (
     <div className="page-wrapper">
@@ -174,7 +196,7 @@ const EditSecretPage: React.FC = () => {
               Cancel
             </button>
             <button type="submit" disabled={saving} className="btn-submit">
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? "Encrypting..." : "Save Changes"}
             </button>
           </div>
         </form>

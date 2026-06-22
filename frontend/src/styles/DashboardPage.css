@@ -161,3 +161,10 @@
   font-size: 18px;
   color: #666;
 }
+
+.revealed-content {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #0f172a;
+  word-break: break-all;
+}

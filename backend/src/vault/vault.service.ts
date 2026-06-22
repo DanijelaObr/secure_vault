@@ -11,7 +11,6 @@ import { UpdateSecretDto } from './dto/update-secret.dto';
 import { User } from '../database/entities/user.entity';
 import { SharedSecret } from '../database/entities/shared-secret.entity';
 import { ShareSecretDto } from './dto/share-secret.dto';
-import { CryptoService } from '../shared/services/crypto.service';
 import { SharedSecretPermission } from 'src/shared/enums';
 import { AuditService } from '../shared/services/audit.service';
 import { AuditAction } from '../shared/enums';
@@ -24,18 +23,15 @@ export class VaultService {
     private secretRepository: Repository<Secret>,
     @InjectRepository(SharedSecret)
     private sharedSecretRepository: Repository<SharedSecret>,
-    private cryptoService: CryptoService,
     private auditService: AuditService,
     private emailService: EmailService,
   ) {}
 
-  /**
-   * Kreiranje nove tajne
-   */
   async createSecret(
     userId: string,
     createSecretDto: CreateSecretDto,
   ): Promise<Secret> {
+    // encryptedData i encryptedKey su VEĆ enkriptovani na klijentu.
     const secret = this.secretRepository.create({
       ...createSecretDto,
       ownerId: userId,
@@ -53,19 +49,15 @@ export class VaultService {
     return savedSecret;
   }
 
-  /**
-   * Dohvati SVE tajne korisnika
-   */
   async getAllSecrets(userId: string): Promise<Secret[]> {
-    return await this.secretRepository.find({
-      where: { ownerId: userId },
+    return this.secretRepository.find({
+      // Honeypot tajne se NE prikazuju kroz interfejs nijednom korisniku.
+      // Ostaju u bazi kao zamka — vidljive samo onome ko im pristupi "ispod haube".
+      where: { ownerId: userId, isHoneypot: false },
       order: { updatedAt: 'DESC' },
     });
   }
 
-  /**
-   * Dohvati JEDNU tajnu (samo ako je vlasnik!)
-   */
   async getSecretById(
     userId: string,
     secretId: string,
@@ -82,15 +74,8 @@ export class VaultService {
       throw new NotFoundException('Secret not found');
     }
 
-    console.log('Secret found:', secret ? 'YES' : 'NO');
-
     // HONEYPOT DETEKCIJA
     if (secret.isHoneypot) {
-      console.warn(
-        `HONEYPOT TRIGGERED! User ${userId} accessed honeypot secret ${secretId}`,
-      );
-
-      // AUDIT LOG - Honeypot
       await this.auditService.log({
         action: AuditAction.HONEYPOT_TRIGGERED,
         userId,
@@ -98,10 +83,8 @@ export class VaultService {
         metadata: { secretTitle: secret.title },
       });
 
-      // Freeze user account
       await this.freezeUserAccount(userId);
 
-      // SEND EMAIL ALERT
       await this.emailService.sendHoneypotAlert(
         userEmail,
         secret.title,
@@ -114,21 +97,16 @@ export class VaultService {
       );
     }
 
-    // Provjeri da li je korisnik vlasnik
     if (secret.ownerId !== userId) {
       throw new ForbiddenException('You do not have access to this secret');
     }
 
-    // Update lastAccessedAt
     secret.lastAccessedAt = new Date();
     await this.secretRepository.save(secret);
 
     return secret;
   }
 
-  /**
-   * Update tajne
-   */
   async updateSecret(
     userId: string,
     secretId: string,
@@ -148,33 +126,25 @@ export class VaultService {
     Object.assign(secret, updateSecretDto);
     const updatedSecret = await this.secretRepository.save(secret);
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_UPDATE,
       userId,
       secretId,
-      metadata: { changes: updateSecretDto },
+      metadata: { title: updatedSecret.title },
     });
 
     return updatedSecret;
   }
 
-  /**
-   * Freeze korisnikov account (honeypot triggered)
-   */
   private async freezeUserAccount(userId: string): Promise<void> {
     const userRepository = this.secretRepository.manager.getRepository(User);
-
     const user = await userRepository.findOne({ where: { id: userId } });
     if (user) {
       user.isFrozen = true;
       await userRepository.save(user);
-      console.error(`User account ${userId} (${user.email}) has been FROZEN!`);
     }
   }
-  /**
-   * Brisanje tajne
-   */
+
   async deleteSecret(
     userId: string,
     secretId: string,
@@ -190,7 +160,6 @@ export class VaultService {
       userAgent,
     );
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_DELETE,
       userId,
@@ -199,23 +168,16 @@ export class VaultService {
     });
 
     await this.secretRepository.remove(secret);
-
     return { message: 'Secret deleted successfully' };
   }
 
-  /**
-   * Dohvati favorite tajne
-   */
   async getFavoriteSecrets(userId: string): Promise<Secret[]> {
-    return await this.secretRepository.find({
-      where: { ownerId: userId, isFavorite: true },
+    return this.secretRepository.find({
+      where: { ownerId: userId, isFavorite: true, isHoneypot: false },
       order: { updatedAt: 'DESC' },
     });
   }
 
-  /**
-   * Kreiranje honeypot tajne (samo za admin-e!)
-   */
   async createHoneypot(
     userId: string,
     createSecretDto: CreateSecretDto,
@@ -223,16 +185,14 @@ export class VaultService {
     const secret = this.secretRepository.create({
       ...createSecretDto,
       ownerId: userId,
-      isHoneypot: true, // ← Označi kao honeypot!
+      isHoneypot: true,
     });
-
-    console.log(`Honeypot secret created: "${secret.title}" by user ${userId}`);
-
-    return await this.secretRepository.save(secret);
+    return this.secretRepository.save(secret);
   }
 
   /**
-   * Podijeli tajnu sa drugim korisnikom
+   * Dijeljenje tajne. Klijent je VEĆ re-enkriptovao AES ključ javnim ključem
+   * primaoca i poslao ga kao shareDto.encryptedKey. Server samo skladišti.
    */
   async shareSecret(
     ownerId: string,
@@ -260,7 +220,6 @@ export class VaultService {
         `User with email ${shareDto.sharedWithEmail} not found`,
       );
     }
-
     if (targetUser.id === ownerId) {
       throw new ForbiddenException('Cannot share secret with yourself');
     }
@@ -268,26 +227,19 @@ export class VaultService {
     const existingShare = await this.sharedSecretRepository.findOne({
       where: { secretId, sharedWithUserId: targetUser.id },
     });
-
     if (existingShare) {
       throw new ForbiddenException('Secret already shared with this user');
     }
 
-    const encryptedKey = this.cryptoService.encryptWithPublicKey(
-      secret.encryptedData,
-      targetUser.publicKey,
-    );
-
+    // encryptedKey je re-enkriptovan NA KLIJENTU javnim ključem primaoca.
     const sharedSecret = this.sharedSecretRepository.create({
       secretId,
       sharedWithUserId: targetUser.id,
-      encryptedKey,
+      encryptedKey: shareDto.encryptedKey,
       permission: shareDto.permission || SharedSecretPermission.READ,
     });
-
     await this.sharedSecretRepository.save(sharedSecret);
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_SHARE,
       userId: ownerId,
@@ -298,11 +250,15 @@ export class VaultService {
       },
     });
 
+    // void da referenca na 'secret' ne baca lint warning
+    void secret;
+
     return { message: `Secret shared with ${targetUser.email}` };
   }
 
   /**
-   * Dohvati sve tajne podijeljene SA MNOM
+   * Tajne podijeljene SA MNOM. Vraćamo encryptedData (sadržaj) i MOJ encryptedKey
+   * (AES ključ enkriptovan mojim javnim ključem). Dešifrovanje ide na klijentu.
    */
   async getSharedWithMe(userId: string): Promise<any[]> {
     const sharedSecrets = await this.sharedSecretRepository.find({
@@ -316,8 +272,8 @@ export class VaultService {
       type: shared.secret.type,
       url: shared.secret.url,
       username: shared.secret.username,
-      notes: shared.secret.notes,
-      encryptedData: shared.encryptedKey,
+      encryptedData: shared.secret.encryptedData,
+      encryptedKey: shared.encryptedKey, // ključ za MENE
       owner: {
         email: shared.secret.owner.email,
         username: shared.secret.owner.username,
@@ -327,9 +283,6 @@ export class VaultService {
     }));
   }
 
-  /**
-   * Revoke sharing
-   */
   async revokeShare(
     ownerId: string,
     secretId: string,
@@ -350,7 +303,6 @@ export class VaultService {
     const targetUser = await userRepository.findOne({
       where: { email: sharedWithEmail },
     });
-
     if (!targetUser) {
       throw new NotFoundException(
         `User with email ${sharedWithEmail} not found`,
@@ -360,14 +312,12 @@ export class VaultService {
     const sharedSecret = await this.sharedSecretRepository.findOne({
       where: { secretId, sharedWithUserId: targetUser.id },
     });
-
     if (!sharedSecret) {
       throw new NotFoundException('Shared secret not found');
     }
 
     await this.sharedSecretRepository.remove(sharedSecret);
 
-    // AUDIT LOG
     await this.auditService.log({
       action: AuditAction.SECRET_REVOKE_SHARE,
       userId: ownerId,
@@ -379,26 +329,19 @@ export class VaultService {
   }
 
   /**
-   * SQL Injection TEST endpoint - NAMJERNO RANJIV!
-   * Samo za testiranje honeypot sistema!
-   * ADMIN ONLY!
+   * SQL Injection TEST endpoint — NAMJERNO RANJIV. Radi samo ako je
+   * sqlInjectionTestEnabled = true u security policy (admin ga privremeno pali/gasi).
+   * Provjeru flega radi kontroler prije poziva.
    */
   async testSqlInjection(email: string): Promise<any> {
-    // NAMJERNO RANJIV KOD - NE KORISTITI U PRODUKCIJI!
-    // Raw SQL query bez parametrizacije
     const query = `SELECT * FROM users WHERE email = '${email}'`;
-
     try {
       const result = await this.secretRepository.query(query);
-      return {
-        message: 'SQL Injection test executed',
-        query: query,
-        results: result,
-      };
+      return { message: 'SQL Injection test executed', query, results: result };
     } catch (error: any) {
       return {
         message: 'SQL Injection test failed',
-        query: query,
+        query,
         error: error.message,
       };
     }
